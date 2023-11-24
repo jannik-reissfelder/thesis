@@ -29,3 +29,26 @@ class MainClass:
     self.target_name = target_name
     self.use_pca = use_pca
     self.use_normalization = use_normalization
+
+
+    def load_data(self, path: str = None):
+        """
+        This function loads the data from a given path and returns the data as a pandas dataframe.
+        """
+        if path is None:
+            path = os.getcwd()
+        data = pd.read_csv(path)
+        return data
+
+    def preprocessing(self, data: pd.DataFrame = None):
+        """
+        This function preprocesses the data. It uses the PreprocessingClass from the preprocessing module.
+        """
+        if data is None:
+            data = self.load_data()
+        preprocessing = PreprocessingClass(data=data, target_name=self.target_name, use_pca=self.use_pca, use_normalization=self.use_normalization)
+        preprocessing.preprocessing()
+        return preprocessing
+
+    def train_test_split(self, data: pd.DataFrame = None):
+
