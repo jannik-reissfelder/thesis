@@ -29,7 +29,8 @@ class MainClass:
     self.target_name = target_name
     self.use_pca = use_pca
     self.use_normalization = use_normalization
-
+    # make a test comment
+    # make a second test comment
 
     def load_data(self, path: str = None):
         """
