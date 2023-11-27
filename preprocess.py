@@ -12,10 +12,9 @@ from sklearn.decomposition import PCA
 
 class PreprocessingClass:
     def __init__(self,
-                 regression_type: str = 'single',
                  use_augmentation: bool = True,
                  use_normalized_data: bool = True,
-                 use_pca: bool = True,
+                 use_pca: bool = False,
                  std_threshold: int = 1
                  ):
 
@@ -253,4 +252,14 @@ class PreprocessingClass:
 
         # reassign Y_prime_all to Y_prime_final
         self.Y_prime_final = self.Y_prime_all.drop(columns=['source'])
+
+    def run_all_methods(self):
+        """
+        Runs all methods in the correct order.
+        """
+        self.load_data()
+        self.preprocessing()
+        self.filter_high_variance_outputs()
+        self.augment_data_if_needed()
+        self.reduce_X_if_needed()
 
