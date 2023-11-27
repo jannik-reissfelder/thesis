@@ -1,10 +1,6 @@
 # handle imports
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, classification_report, confusion_matrix, roc_curve, precision_recall_curve
 import seaborn as sns
-from sklearn.metrics import make_scorer, f1_score, fbeta_score
-from sklearn.metrics import auc
-import os
-from preprocess import PreprocessingClass
+s import PreprocessingClass
 from sklearn.model_selection import LeaveOneOut, KFold
 from sklearn.metrics import mean_squared_error, r2_score
 import numpy as np
