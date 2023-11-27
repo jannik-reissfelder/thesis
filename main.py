@@ -17,39 +17,95 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import make_scorer, f1_score, fbeta_score
 from sklearn.metrics import auc
 import os
+import pandas as pd
 
 # initialize the class
 
-class MainClass:
+class PreprocessingClass
     def __init__(self,
-                 target_name: str = None,
+                 regression_type: str = 'single',
+                 use_augmentation: bool = True,
+                 use_normalized_data: bool = True,
                  use_pca: bool = True,
-                 use_normalization: bool = True,
+                 std_threshold: int = 1
                  ):
-    self.target_name = target_name
-    self.use_pca = use_pca
-    self.use_normalization = use_normalization
-    # make a test comment
-    # make a second test comment
+
+        self.Y_prime = None
+        self.regression_type = regression_type
+        self.use_augmentation = use_augmentation
+        self.use_normalized_data = use_normalized_data
+        self.use_pca = use_pca
+        self.input_path = None
+        self.data = None
+        self.X = None
+        self.Y = None
+        self.std_threshold = std_threshold
 
     def load_data(self, path: str = None):
         """
         This function loads the data from a given path and returns the data as a pandas dataframe.
         """
-        if path is None:
-            path = os.getcwd()
-        data = pd.read_csv(path)
-        return data
+
+        if self.use_normalized_data == True:
+            self.data = pd.read_parquet("./data/data_merged.gz")
+        else:
+            self.data = pd.read_parquet("./data/data_merged_absolute.gz")
 
     def preprocessing(self, data: pd.DataFrame = None):
         """
-        This function preprocesses the data. It uses the PreprocessingClass from the preprocessing module.
+        This function preprocesses the data.
+        It assigns the target matrix and the feature matrix.
         """
-        if data is None:
-            data = self.load_data()
-        preprocessing = PreprocessingClass(data=data, target_name=self.target_name, use_pca=self.use_pca, use_normalization=self.use_normalization)
-        preprocessing.preprocessing()
-        return preprocessing
+        self.data.set_index('Species', inplace=True)
+        self.data.drop(columns=["index"], inplace=True)
+        # Splitting the dataframe into features and targets
+        self.X = self.data.iloc[:, :12]
+        self.Y = self.data.iloc[:, 12:]
 
-    def train_test_split(self, data: pd.DataFrame = None):
+        print("X-shape:", self.X.shape)
+        print("Y-shape:", self.Y.shape)
+    def filter_high_variance_outputs(self):
+        """
+        Filters out high variance output variables for each subspecies within the output matrix Y.
+
+        Parameters:
+        - num_std_dev: int or float, the number of standard deviations to use for the threshold.
+
+        Returns:
+        - filtered_outputs: dict, a dictionary with species names as keys and filtered DataFrames as values.
+        """
+
+        def filter_species_outputs(Y_species, num_std_dev):
+            """Helper function to filter outputs for a single species."""
+
+            # get mode across all output targets and remove those with mode greater than 0
+            mode_filter = Y_species.mode(axis=0).iloc[0] > 0
+            # get variance across all output targets and remove those with variance greater than threshold
+            std_per_output = Y_species.std(axis=0)
+            mean_std_across_output = std_per_output.mean()
+            std_of_std_across_output = std_per_output.std()
+            threshold = mean_std_across_output + num_std_dev * std_of_std_across_output
+            variance_filter = std_per_output <= threshold
+            # combine filters
+            b = (variance_filter.values & mode_filter)
+            print(len(set(Y_species.columns[b].values)))
+            return set(Y_species.columns[b].values)
+
+        self.filtered_outputs = {}
+        species_names = self.Y.index.unique()
+        for species_name in species_names:
+            Y_species = self.Y.loc[species_name]
+            print(species_name)
+            Y_species_filtered_set = filter_species_outputs(Y_species, self.std_threshold)
+            self.filtered_outputs[species_name] = Y_species_filtered_set
+
+        # make union of all filtered outputs
+        self.union_microbes = set.union(*self.filtered_species.values())
+        print("Number of microbes after filtering:", len(self.union_microbes))
+        # Reassign Y to Y_prime
+        self.Y_prime = self.Y[list(self.union_microbes)]
+
+
+
+
 
