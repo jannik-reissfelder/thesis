@@ -1,6 +1,6 @@
 # handle imports
 import seaborn as sns
-s import PreprocessingClass
+from preprocess import PreprocessingClass
 from sklearn.model_selection import LeaveOneOut, KFold
 from sklearn.metrics import mean_squared_error, r2_score
 import numpy as np
