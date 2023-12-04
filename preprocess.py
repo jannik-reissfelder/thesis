@@ -7,26 +7,32 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from sklearn.decomposition import PCA
+from gurobipy import Model, GRB, quicksum
+import time
 
 # initialize the class
 
 class PreprocessingClass:
     def __init__(self,
+                 scenario: str = "baseline",
                  use_augmentation: bool = True,
-                 use_normalized_data: bool = True,
+                 use_normalized_data: bool = False,
                  use_pca: bool = False,
-                 std_threshold: int = 1
+                 std_threshold: int = 1,
+                 target_limit: int = 100
                  ):
 
         self.Y_prime = None
         self.use_augmentation = use_augmentation
         self.use_normalized_data = use_normalized_data
         self.use_pca = use_pca
+        self.scenario = scenario
         self.input_path = None
         self.data = None
         self.X = None
         self.Y = None
         self.std_threshold = std_threshold
+        self.target_limit = target_limit
 
     def load_data(self, path: str = None):
         """
@@ -51,7 +57,8 @@ class PreprocessingClass:
 
         print("X-shape:", self.X.shape)
         print("Y-shape:", self.Y.shape)
-    def filter_high_variance_outputs(self):
+        
+    def filter_high_variance_outputs_manually(self):
         """
         Filters out high variance output variables for each subspecies within the output matrix Y.
 
@@ -95,9 +102,98 @@ class PreprocessingClass:
 
 
 
+    def filter_target_space_by_optimization(self):
+
+
+        # Placeholder for the final set of selected target variables across all species
+        self.selected_targets_union = set()
+
+        # init empty
+        self.species_target_count = {}
+
+        # get unique species
+        species_names = self.Y.index.unique()
+
+        # Calculate the variance of each target variable across species
+        self.across_species_variances = self.Y.groupby("Species").mean().var()
+
+        # Weight parameter to balance the two objectives
+        self.gamma = 0.5 # This can be adjusted based on the relative importance of the objectives
+
+
+        # Iterate over each species to create and solve an optimization problem
+        for s in species_names:
+            # Extract the subset of the dataframe for species 's'
+            Y_species = self.Y.loc[s]
+            
+            # Create a new Gurobi model for species 's'
+            model = Model(f"species_{s}_selection")
+            
+            # Add binary decision variables for each target variable 'j'
+            decision_vars = model.addVars(self.Y.columns, vtype=GRB.BINARY, name="select")
+            
+            # Calculate the variance for each target variable 'j' within species 's' using Pandas
+            within_species_variances = Y_species.var(axis=0)
+
+            # Set the combined objective function
+            # Minimize within-species variance and maximize across-species variance
+            model.setObjective(
+                quicksum(decision_vars[j] * (self.gamma * within_species_variances[j] - (1 - self.gamma) * self.across_species_variances[j])
+                        for j in self.Y.columns),
+                GRB.MINIMIZE
+            )
+            
+            # Add constraint to limit the number of selected target variables to 30
+            model.addConstr(quicksum(decision_vars[j] for j in self.Y.columns) == self.target_limit, "TargetLimit")
+            
+            # Solve the optimization problem
+            model.optimize()
+            
+            # Extract the selected target variables for species 's'
+            selected_targets_s = {j for j, var in decision_vars.items() if var.X > 0.5}
+            
+            # Add the selected target variables to the union set
+            self.selected_targets_union.update(selected_targets_s)
+            
+            # Update the dictionary with the number of selected targets for species 's'
+            self.species_target_count[s] = sum(var.X > 0.5 for var in decision_vars.values())
+
+        print("Optimization complete.")
+        print("Number of selected targets:", len(self.selected_targets_union))
+        print("Number of selected targets per species:", self.species_target_count)
+
+        # Reassign Y to Y_prime
+        print("Reassigning Y to Y_prime")
+        self.Y_prime = self.Y[list(self.selected_targets_union)]
+        
+    def filter_outputs_based_on_scenario(self):
+        """
+        Filters output space based on the scenario.
+        If "baseline" is selected, no filtering is applied.
+        If "manual" is selected, method filter_high_variance_outputs_manually is applied.
+        If "optimization" is selected, method filter_target_space_by_optimization is applied.
+        """
+        if self.scenario == "baseline":
+            print("Baseline scenario selected; no filtering applied.")
+            self.Y_prime = self.Y
+        elif self.scenario == "manual":
+            print("Manual scenario selected; filtering based on standard deviation applied.")
+            time.sleep(3)
+            self.filter_high_variance_outputs_manually()
+        elif self.scenario == "optimization":
+            print("Optimization scenario selected; filtering based on optimization applied.")
+            time.sleep(3)
+            self.filter_target_space_by_optimization()
+        else:
+            print("Invalid scenario selected; raise ValueError.")
+            raise ValueError
+        
+
+
 
     def mixup_by_subspecies(self):
         '''Applies Mixup augmentation to the dataset within each subspecies.'''
+        
         # Initialize empty DataFrames to hold the augmented data
         augmented_X = pd.DataFrame(columns=self.X.columns)
         augmented_Y = pd.DataFrame(columns=self.Y_prime.columns)
@@ -259,7 +355,7 @@ class PreprocessingClass:
         """
         self.load_data()
         self.preprocessing()
-        self.filter_high_variance_outputs()
+        self.filter_outputs_based_on_scenario()
         self.augment_data_if_needed()
         self.reduce_X_if_needed()
 
