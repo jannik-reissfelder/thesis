@@ -21,10 +21,11 @@ from sklearn.model_selection import train_test_split
 
 class TrainerClass:
     def __init__(self,
-                 regression_type: str = 'single',
-                 model_name: str = 'linear_regression',
+                 regression_type: str = 'multi',
+                 model_name: str = 'random_forest',
                  cv_type: str = 'kfold',
                  target_selection: str = 'abundant',
+                 preprocess_kwargs: dict = None, 
             ):
 
         self.regression_type = regression_type
@@ -36,6 +37,13 @@ class TrainerClass:
         self.model_name = model_name
         self.model = None
         self.target_selection = target_selection
+        self.y_selected = None
+        self.y_final = None
+        self.X = None
+        self.y = None
+        self.preprocess = None
+        self.preprocess_kwargs = preprocess_kwargs if preprocess_kwargs is not None else {}
+
 
         if self.cv_type == 'loo':
             self.cv = LeaveOneOut()
@@ -53,7 +61,7 @@ class TrainerClass:
 
         self.model_regression_dict= {
             'linear_regression': LinearRegression(),
-            'random_forest': RandomForestRegressor(),
+            'random_forest': RandomForestRegressor(max_depth=5, random_state=42),
             'xgboost': XGBRegressor(), #TODO check if this works
             'svm': SVR(), # TODO check if this works
             'mlp': MLPRegressor(), # TODO check if this works
@@ -66,7 +74,7 @@ class TrainerClass:
         initialize preprocessing class
         :return:
         """
-        self.preprocess = PreprocessingClass()
+        self.preprocess = PreprocessingClass(**self.preprocess_kwargs)
         self.preprocess.run_all_methods()
         self.X = self.preprocess.X_final
         self.y = self.preprocess.Y_prime_final
@@ -211,8 +219,8 @@ class TrainerClass:
         print(f"""RMSE: {np.mean(self.rmse_scores)}""")
         print(f"""MAPE: {np.mean(self.mape_scores)}""")
         if self.cv_type == 'kfold':
-            print(f"""R2: {np.mean(self.r2_scores)}""")
-            print(f"""R2 per output: {self.r2_scores_over_outputs}""")
+            print(f"""R2_avg: {np.mean(self.r2_scores)}""")
+            print(f"""R2_per_fold: {self.r2_scores}""")
 
     def visualize_train_test_performance(self):
         """

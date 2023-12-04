@@ -5,7 +5,8 @@
 *.exe
 *.dll
 *.so
-*.dylib
+*.cfg
+*.ipynb
 
 # Ignore build output directories
 /bin/
@@ -15,7 +16,12 @@
 # Ignore package manager directories
 /node_modules/
 /packages/
-./Lib
+/Lib
+/Scripts
+/etc
+/share
+/__pycache__
+/data
 
 # Ignore system files
 .DS_Store
