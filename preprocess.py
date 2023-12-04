@@ -186,7 +186,7 @@ class PreprocessingClass:
             self.filter_target_space_by_optimization()
         else:
             print("Invalid scenario selected; raise ValueError.")
-            raise ValueError
+            raise ValueError("Invalid scenario selected. Please choose 'baseline', 'manual', or 'optimization'.")
         
 
 
