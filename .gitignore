@@ -21,7 +21,7 @@
 /etc
 /share
 /__pycache__
-/data
+
 
 # Ignore system files
 .DS_Store
@@ -36,3 +36,8 @@ Thumbs.db
 
 # Ignore sensitive information
 secrets.txt
+
+# ignore inputs and results
+
+/data
+/results

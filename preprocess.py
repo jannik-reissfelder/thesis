@@ -15,9 +15,10 @@ import time
 class PreprocessingClass:
     def __init__(self,
                  scenario: str = "baseline",
-                 use_augmentation: bool = True,
-                 use_normalized_data: bool = False,
+                 use_augmentation: bool = False,
+                 use_normalized_data: str = "CSS",
                  use_pca: bool = False,
+                 normalize_X: str = "False",
                  std_threshold: int = 1,
                  target_limit: int = 100
                  ):
@@ -31,6 +32,7 @@ class PreprocessingClass:
         self.data = None
         self.X = None
         self.Y = None
+        self.normalize_X = normalize_X
         self.std_threshold = std_threshold
         self.target_limit = target_limit
 
@@ -38,11 +40,8 @@ class PreprocessingClass:
         """
         This function loads the data from a given path and returns the data as a pandas dataframe.
         """
+        self.data = pd.read_parquet("./data/data_merged_absolute.gz")
 
-        if self.use_normalized_data:
-            self.data = pd.read_parquet("./data/data_merged.gz")
-        else:
-            self.data = pd.read_parquet("./data/data_merged_absolute.gz")
 
     def preprocessing(self, data: pd.DataFrame = None):
         """
@@ -54,10 +53,72 @@ class PreprocessingClass:
         # Splitting the dataframe into features and targets
         self.X = self.data.iloc[:, :12]
         self.Y = self.data.iloc[:, 12:]
-
         print("X-shape:", self.X.shape)
         print("Y-shape:", self.Y.shape)
-        
+    
+    def normalize_microbiome_data(self):
+        """
+        Normalize microbiome data using the specified method within Pandas DataFrame.
+
+        Parameters:
+        - data_frame: Pandas DataFrame
+            Microbiome data matrix where samples are rows and OTUs are columns.
+        - method: str
+            Normalization method ("TSS", "CSS", "DESeq", "TMM", "GMPR", "absolute").
+
+        Returns:
+        - normalized_data_frame: Pandas DataFrame
+            Normalized microbiome data matrix.
+        """
+
+        # Check if the method is valid
+        valid_methods = ["TSS", "CSS", "DESeq", "TMM",  "absolute"]
+        if self.use_normalized_data not in valid_methods:
+            raise ValueError("Invalid normalization method. Please choose from: {}".format(", ".join(valid_methods)))
+
+        # Absolute: No normalization
+        if self.use_normalized_data == "absolute":
+            self.Y = self.Y
+
+        # TSS Normalization
+        elif self.use_normalized_data == "TSS":
+            scale_factor = self.Y.sum(axis=1)
+            self.Y = self.Y.div(scale_factor, axis=0)
+
+        # CSS Normalization
+        elif self.use_normalized_data == "CSS":
+            scale_factor = self.Y.apply(lambda x: x.sum() / np.median(x[x > 0]), axis=0)
+            self.Y = self.Y.div(scale_factor, axis=1)
+
+        # DESeq Normalization
+        elif self.use_normalized_data == "DESeq":
+            scale_factor = self.Y.apply(lambda x: x.sum() / np.exp(np.mean(np.log(x[x > 0]))), axis=0)
+            self.Y = self.Y.div(scale_factor, axis=1)
+
+        # TMM Normalization
+        elif self.use_normalized_data == "TMM":
+            scale_factor = self.Y.apply(lambda x: np.median(x) / x, axis=0)
+            self.Y = self.Y.mul(scale_factor, axis=1)
+
+    
+    def normalize_X_(self):
+        """
+        This function normalizes the feature matrix X.
+        """
+
+        if self.normalize_X == "False":
+            print("X normalization not applied; normalize_X is set to False.")
+            self.X = self.X
+        elif self.normalize_X == "minmax":
+            print("X normalization applied; normalize_X is set to minmax.")
+            self.X = (self.X - self.X.min()) / (self.X.max() - self.X.min())
+        elif self.normalize_X == "standard":
+            print("X normalization applied; normalize_X is set to standard.")
+            self.X = (self.X - self.X.mean()) / self.X.std()
+        else:
+            print("Invalid normalization method selected; raise ValueError.")
+            raise ValueError("Invalid normalization method selected. Please choose 'False', 'minmax', or 'standard'.")
+
     def filter_high_variance_outputs_manually(self):
         """
         Filters out high variance output variables for each subspecies within the output matrix Y.
@@ -108,59 +169,57 @@ class PreprocessingClass:
         # Placeholder for the final set of selected target variables across all species
         self.selected_targets_union = set()
 
-        # init empty
-        self.species_target_count = {}
 
         # get unique species
         species_names = self.Y.index.unique()
+
+        # Calculate the within-species variance for each column and store it in a dictionary
+        self.within_species_variances = {}
+        for j in self.Y.columns:
+            self.within_species_variances[j] = self.Y.groupby('Species')[j].var().sum()
 
         # Calculate the variance of each target variable across species
         self.across_species_variances = self.Y.groupby("Species").mean().var()
 
         # Weight parameter to balance the two objectives
         self.gamma = 0.5 # This can be adjusted based on the relative importance of the objectives
+        
+        # Create a new Gurobi model for species 's'
+        self.optimizer = Model(f"species_selection")
+        
+        # Add binary decision variables for each target variable 'j'
+        decision_vars = self.optimizer.addVars(self.Y.columns, vtype=GRB.BINARY, name="select")
+        
+        # Add constraint to limit the number of selected target variables 
+        self.optimizer.addConstr(quicksum(decision_vars[j] for j in self.Y.columns) == self.target_limit, "TargetLimit")
+        
+        # Now we will use the pre-calculated within variances from the dictionary
+        self.sum_within_species_variances = quicksum(
+            decision_vars[j] * self.within_species_variances[j] for j in self.Y.columns
+        )
 
-
-        # Iterate over each species to create and solve an optimization problem
-        for s in species_names:
-            # Extract the subset of the dataframe for species 's'
-            Y_species = self.Y.loc[s]
-            
-            # Create a new Gurobi model for species 's'
-            model = Model(f"species_{s}_selection")
-            
-            # Add binary decision variables for each target variable 'j'
-            decision_vars = model.addVars(self.Y.columns, vtype=GRB.BINARY, name="select")
-            
-            # Calculate the variance for each target variable 'j' within species 's' using Pandas
-            within_species_variances = Y_species.var(axis=0)
-
-            # Set the combined objective function
-            # Minimize within-species variance and maximize across-species variance
-            model.setObjective(
-                quicksum(decision_vars[j] * (self.gamma * within_species_variances[j] - (1 - self.gamma) * self.across_species_variances[j])
-                        for j in self.Y.columns),
-                GRB.MINIMIZE
-            )
-            
-            # Add constraint to limit the number of selected target variables to 30
-            model.addConstr(quicksum(decision_vars[j] for j in self.Y.columns) == self.target_limit, "TargetLimit")
-            
-            # Solve the optimization problem
-            model.optimize()
-            
-            # Extract the selected target variables for species 's'
-            selected_targets_s = {j for j, var in decision_vars.items() if var.X > 0.5}
-            
-            # Add the selected target variables to the union set
-            self.selected_targets_union.update(selected_targets_s)
-            
-            # Update the dictionary with the number of selected targets for species 's'
-            self.species_target_count[s] = sum(var.X > 0.5 for var in decision_vars.values())
+        # Set the combined objective function
+        # Minimize within-species variance and maximize across-species variance
+        self.optimizer.setObjective(
+            quicksum(decision_vars[j] * (self.gamma * self.sum_within_species_variances[j] - (1 - self.gamma) * self.across_species_variances[j])
+                    for j in self.Y.columns),
+            GRB.MINIMIZE
+        )
+        
+        
+        # Solve the optimization problem
+        self.optimizer.optimize()
+        
+        # Extract the selected target variables for species 's'
+        selected_targets = {j for j, var in decision_vars.items() if var.X > 0.5}
+        
+        # Add the selected target variables to the union set
+        self.selected_targets_union.update(selected_targets)
+        
 
         print("Optimization complete.")
         print("Number of selected targets:", len(self.selected_targets_union))
-        print("Number of selected targets per species:", self.species_target_count)
+        
 
         # Reassign Y to Y_prime
         print("Reassigning Y to Y_prime")
@@ -355,6 +414,8 @@ class PreprocessingClass:
         """
         self.load_data()
         self.preprocessing()
+        self.normalize_microbiome_data()
+        self.normalize_X_()
         self.filter_outputs_based_on_scenario()
         self.augment_data_if_needed()
         self.reduce_X_if_needed()
