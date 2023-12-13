@@ -1,36 +1,36 @@
-# README for TrainerClass
+# README for PreprocessingClass
 
 ## Module Description
-The `trainer.py` module contains the `TrainerClass`, which is designed to facilitate the training and evaluation of various machine learning regression models. It supports different types of regression (single or multi-output), cross-validation methods (Leave-One-Out or K-Fold), and a selection of regression models. The class also includes methods for preprocessing data, selecting subsets of targets, initializing models, performing cross-validation, and visualizing results.
+The `preprocessing.py` module contains the `PreprocessingClass`, which is responsible for the preprocessing of data in preparation for machine learning tasks. This class offers a variety of preprocessing functionalities, including data loading, normalization, variance filtering, target space reduction, data augmentation, and dimensionality reduction using PCA. The class is designed to handle different scenarios and can be customized with various options to suit the needs of the analysis.
 
 ## Usage
-- `regression_type`: Specifies whether to perform single or multi-output regression.
-- `model_name`: Chooses the regression model to use, such as 'linear_regression', 'random_forest', 'xgboost', 'svm', 'mlp', 'ridge', or 'lasso'.
-- `cv_type`: Determines the type of cross-validation, either 'loo' for Leave-One-Out or 'kfold' for K-Fold.
-- `target_selection`: Chooses between 'abundant' or 'sparse' targets for regression.
+- `scenario`: Specifies the preprocessing scenario, such as 'baseline', 'manual', or 'optimization'.
+- `use_augmentation`: Determines whether to apply Mixup data augmentation.
+- `use_normalized_data`: Chooses the normalization method for microbiome data, such as 'TSS', 'CSS', 'DESeq', 'TMM', or 'absolute'.
+- `use_pca`: Indicates whether to apply PCA for dimensionality reduction.
+- `normalize_X`: Specifies the normalization method for the feature matrix X, such as 'False', 'minmax', or 'standard'.
+- `std_threshold`: Sets the number of standard deviations to use for variance filtering.
+- `target_limit`: Limits the number of target variables in the optimization scenario.
 
 ### Example Use
-To initialize the `TrainerClass` with all attributes set to true and import the class, you can use the following code snippet:
+To initialize the `PreprocessingClass` with specific settings and import the class, you can use the following code snippet:
 
 ```python
-from trainer import TrainerClass
+from preprocessing import PreprocessingClass
 
-# Initialize the TrainerClass with desired settings
-trainer = TrainerClass(
-    regression_type='multi',
-    model_name='linear_regression',
-    cv_type='kfold',
-    target_selection='abundant'
+# Initialize the PreprocessingClass with desired settings
+preprocessor = PreprocessingClass(
+    scenario='optimization',
+    use_augmentation=True,
+    use_normalized_data='CSS',
+    use_pca=True,
+    normalize_X='minmax',
+    std_threshold=2,
+    target_limit=50
 )
 
 # Example usage of the class
-trainer.init_preprocess()
-trainer.select_subset_of_targets_based_on_selected()
-trainer.select_subset_of_targets_based_on_regression_type()
-trainer.init_model_based_on_type()
-trainer.cross_validation()
-trainer.print_results()
-trainer.run_visualization_if_needed()
+preprocessor.run_all_methods()
 ```
 
-This example demonstrates how to import the `TrainerClass` from `trainer.py`, initialize it with specific parameters, and use its methods to preprocess data, select targets, initialize the model, perform cross-validation, print results, and visualize the training and testing performance if the model is 'linear_regression'.
+This example demonstrates how to import the `PreprocessingClass` from `preprocessing.py`, initialize it with specific parameters, and use its `run_all_methods` function to execute all preprocessing steps in the correct order. The steps include data loading, preprocessing, normalization, variance filtering, target space reduction, data augmentation, and dimensionality reduction with PCA.
