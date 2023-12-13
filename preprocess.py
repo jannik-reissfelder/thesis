@@ -95,11 +95,6 @@ class PreprocessingClass:
             scale_factor = self.Y.apply(lambda x: x.sum() / np.exp(np.mean(np.log(x[x > 0]))), axis=0)
             self.Y = self.Y.div(scale_factor, axis=1)
 
-        # TMM Normalization
-        elif self.use_normalized_data == "TMM":
-            scale_factor = self.Y.apply(lambda x: np.median(x) / x, axis=0)
-            self.Y = self.Y.mul(scale_factor, axis=1)
-
     
     def normalize_X_(self):
         """
