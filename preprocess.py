@@ -40,7 +40,7 @@ class PreprocessingClass:
         """
         This function loads the data from a given path and returns the data as a pandas dataframe.
         """
-        self.data = pd.read_parquet("./data/data_merged_absolute.gz")
+        self.data = pd.read_parquet("./data/data_merged.gz")
 
 
     def preprocessing(self, data: pd.DataFrame = None):
@@ -50,11 +50,30 @@ class PreprocessingClass:
         """
         self.data.set_index('Species', inplace=True)
         self.data.drop(columns=["index"], inplace=True)
+
+        # removing the "Pyrus communis" as a non-variant feature
+        self.data.drop(columns="Pyrus communis", inplace=True)
+
+        # removing the orientalis as a final hold out set
+        # it is in a cluster with 4 closely other related species
+        self.hold_out_set = self.data.loc["M. orientalis"]
+        # removing the orientalis from further analysis
+        self.data.drop(self.data.loc["M. orientalis"].index, inplace=True)
+
+
+
         # Splitting the dataframe into features and targets
-        self.X = self.data.iloc[:, :12]
-        self.Y = self.data.iloc[:, 12:]
+        self.X = self.data.iloc[:, :11]
+        self.Y = self.data.iloc[:, 11:]
         print("X-shape:", self.X.shape)
         print("Y-shape:", self.Y.shape)
+
+        # do same for hold out set
+        self.X_hold_out = self.hold_out_set.iloc[:, :11]
+        self.Y_hold_out = self.hold_out_set.iloc[:, 11:]
+        print("X_hold_out-shape:", self.X_hold_out.shape)
+        print("Y_hold_out-shape:", self.Y_hold_out.shape)
+
     
     def normalize_microbiome_data(self):
         """
@@ -259,40 +278,52 @@ class PreprocessingClass:
         # set mix_up_x False to only mix up the outputs
         self.mix_up_x = False
 
-        def mixup_data(X, Y, alpha=0.2, mix_up_x=False):
-            '''Helper Function to apply Mixup augmentation to the dataset.'''
-            # Convert X and Y to numpy arrays
-            x = X.values
-            y = Y.values
-            if alpha > 0:
-                # Sample λ from a Beta distribution
-                lam = np.random.beta(alpha, alpha, x.shape[0])
-            else:
-                # No Mixup is applied if alpha is 0 or less
-                lam = np.ones(x.shape[0])
+        def mixup_data(X, Y, alpha=0.2, mix_up_x=False, degree=100):
+            '''Helper Function to apply Mixup augmentation to the dataset multiple times.'''
+            # Initialize empty lists to store augmented data
+            augmented_x_dfs = []
+            augmented_y_dfs = []
 
-            # Reshape λ to allow element-wise multiplication with x and y
-            lam_y = lam.reshape(-1, 1)
+            for _ in range(degree):
+                # Convert X and Y to numpy arrays
+                x = X.values
+                y = Y.values
+                if alpha > 0:
+                    # Sample λ from a Beta distribution
+                    lam = np.random.beta(alpha, alpha, x.shape[0])
+                else:
+                    # No Mixup is applied if alpha is 0 or less
+                    lam = np.ones(x.shape[0])
 
-            # Randomly shuffle the data
-            index = np.random.permutation(x.shape[0])
+                # Reshape λ to allow element-wise multiplication with x and y
+                lam_y = lam.reshape(-1, 1)
 
-            # Create mixed outputs
-            mixed_y = lam_y * y + (1 - lam_y) * y[index, :]
+                # Randomly shuffle the data
+                index = np.random.permutation(x.shape[0])
 
-            # If mix_up_x is True, also mix the inputs
-            if mix_up_x:
-                lam_x = lam.reshape(-1, 1)
-                mixed_x = lam_x * x + (1 - lam_x) * x[index, :]
-                mixed_x_df = pd.DataFrame(mixed_x, columns=X.columns)
-            else:
-                # If mix_up_x is False, use the original inputs
-                mixed_x_df = X
+                # Create mixed outputs
+                mixed_y = lam_y * y + (1 - lam_y) * y[index, :]
+                mixed_y_df = pd.DataFrame(mixed_y, columns=Y.columns)
+                mixed_y_df.index = Y.index
 
-            # Convert mixed outputs to DataFrame
-            mixed_y_df = pd.DataFrame(mixed_y, columns=Y.columns)
+                # If mix_up_x is True, also mix the inputs
+                if mix_up_x:
+                    lam_x = lam.reshape(-1, 1)
+                    mixed_x = lam_x * x + (1 - lam_x) * x[index, :]
+                    mixed_x_df = pd.DataFrame(mixed_x, columns=X.columns)
+                else:
+                    # If mix_up_x is False, use the original inputs
+                    mixed_x_df = X
 
-            return mixed_x_df, mixed_y_df
+                # Append the mixed data to the lists
+                augmented_x_dfs.append(mixed_x_df)
+                augmented_y_dfs.append(mixed_y_df)
+
+            # Concatenate augmented dataframes
+            augmented_x_df_final = pd.concat(augmented_x_dfs, ignore_index=False)
+            augmented_y_df_final = pd.concat(augmented_y_dfs, ignore_index=False)
+
+            return augmented_x_df_final, augmented_y_df_final
 
         # Iterate through each subspecies
         for species in subspecies:
@@ -304,9 +335,6 @@ class PreprocessingClass:
             # Apply mixup_data function to the current subspecies
             mixed_X_sub, mixed_Y_sub = mixup_data(self.X_sub, self.Y_sub)
 
-            # Set the index of the mixed DataFrames to match the original subspecies index
-            mixed_X_sub.index = self.Y_sub.index
-            mixed_Y_sub.index = self.Y_sub.index
 
             # Append the mixed data to the augmented DataFrames
             augmented_X = pd.concat([augmented_X, mixed_X_sub])
