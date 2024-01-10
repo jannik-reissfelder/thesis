@@ -20,7 +20,8 @@ class PreprocessingClass:
                  use_pca: bool = False,
                  normalize_X: str = "False",
                  std_threshold: int = 1,
-                 target_limit: int = 100
+                 target_limit: int = 100,
+                 hold_out_strategy =  "leave_one_species_out",
                  ):
 
         self.Y_prime = None
@@ -35,6 +36,7 @@ class PreprocessingClass:
         self.normalize_X = normalize_X
         self.std_threshold = std_threshold
         self.target_limit = target_limit
+        self.hold_out_strategy = hold_out_strategy
 
     def load_data(self, path: str = None):
         """
@@ -42,6 +44,47 @@ class PreprocessingClass:
         """
         self.data = pd.read_parquet("./data/data_merged.gz")
 
+
+
+    def set_hold_out_set(self):
+        """
+        This function sets the hold out set.
+
+        """
+        if self.hold_out_strategy == "leave_one_species_out":
+            # Strategy 1: Leave 1 species out
+            # removing the orientalis as a final hold out set
+            # it is in a cluster with 4 closely other related species
+            self.hold_out_set = self.data.loc["M. orientalis"]
+            # removing the orientalis from further analysis
+            self.data.drop(self.data.loc["M. orientalis"].index, inplace=True)
+
+        elif self.hold_out_strategy == "leave_one_out_per_species":
+            # Strategy 2: Leave 1 out per species
+            self.data.reset_index(inplace=True)
+            self.hold_out_set = self.data.groupby("Species", group_keys=False).apply(lambda x: x.sample(1, random_state=42))
+            # Important: I drop the hold out set from the data
+            # otherwise it will be included in the training set
+            # this might reduce variation for data augmentation
+            self.data.drop(self.hold_out_set.index, inplace=True)
+            # reset index to Species
+            self.hold_out_set.set_index("Species", inplace=True)
+            self.data.set_index("Species", inplace=True)
+        elif self.hold_out_strategy == "leave_one_sample_out":
+            # Strategy 3: Leave 1 sample out
+            self.data.reset_index(inplace=True)
+            self.hold_out_set =  self.data[self.data["Species"] == "M. orientalis"].sample(1, random_state=42)
+            # Important: I drop the hold out set from the data
+            # otherwise it will be included in the training set
+            # this might reduce variation for data augmentation
+            self.data.drop(self.hold_out_set.index, inplace=True)
+            # reset index to Species
+            self.hold_out_set.set_index("Species", inplace=True)
+            self.data.set_index("Species", inplace=True)
+
+        else:
+            print("Invalid hold out strategy selected; raise ValueError.")
+            raise ValueError("Invalid hold out strategy selected. Please choose 'leave_one_species_out' or 'leave_one_out_per_species'.")
 
     def preprocessing(self, data: pd.DataFrame = None):
         """
@@ -54,13 +97,8 @@ class PreprocessingClass:
         # removing the "Pyrus communis" as a non-variant feature
         self.data.drop(columns="Pyrus communis", inplace=True)
 
-        # removing the orientalis as a final hold out set
-        # it is in a cluster with 4 closely other related species
-        self.hold_out_set = self.data.loc["M. orientalis"]
-        # removing the orientalis from further analysis
-        self.data.drop(self.data.loc["M. orientalis"].index, inplace=True)
-
-
+        # applying the hold out strategy
+        self.set_hold_out_set()
 
         # Splitting the dataframe into features and targets
         self.X = self.data.iloc[:, :11]
@@ -273,12 +311,11 @@ class PreprocessingClass:
 
         # Get unique subspecies from the index of Y_prime
         subspecies = self.Y_prime.index.unique()
-        # set alpha for mixup
-        self.alpha = 0.2
+
         # set mix_up_x False to only mix up the outputs
         self.mix_up_x = False
 
-        def mixup_data(X, Y, alpha=0.2, mix_up_x=False, degree=100):
+        def mixup_data(X, Y, alpha=1.0, mix_up_x=False, degree=100):
             '''Helper Function to apply Mixup augmentation to the dataset multiple times.'''
             # Initialize empty lists to store augmented data
             augmented_x_dfs = []
