@@ -14,6 +14,7 @@ import time
 
 class PreprocessingClass:
     def __init__(self,
+                 data_source: str = "malus",
                  scenario: str = "baseline",
                  use_augmentation: bool = False,
                  use_normalized_data: str = "CSS",
@@ -37,12 +38,13 @@ class PreprocessingClass:
         self.std_threshold = std_threshold
         self.target_limit = target_limit
         self.hold_out_strategy = hold_out_strategy
+        self.data_source = data_source
 
     def load_data(self, path: str = None):
         """
         This function loads the data from a given path and returns the data as a pandas dataframe.
         """
-        self.data = pd.read_parquet("./data/data_merged.gz")
+        self.data = pd.read_parquet("./data/Malus/data_merged.gz") if self.data_source == "malus" else pd.read_parquet("./data/Seeds/60_seeds_CSS_merged.gz")
 
 
 
@@ -55,9 +57,9 @@ class PreprocessingClass:
             # Strategy 1: Leave 1 species out
             # removing the orientalis as a final hold out set
             # it is in a cluster with 4 closely other related species
-            self.hold_out_set = self.data.loc["M. orientalis"]
+            self.hold_out_set = self.data.loc["M. orientalis"] if self.data_source == "malus" else self.data.loc["Brassica rapa"] ## TODO adjust to correct seed species
             # removing the orientalis from further analysis
-            self.data.drop(self.data.loc["M. orientalis"].index, inplace=True)
+            self.data.drop(self.data.loc["M. orientalis"].index, inplace=True) if self.data_source == "malus" else self.data.drop(self.data.loc["Brassica rapa"].index, inplace=True)
 
         elif self.hold_out_strategy == "leave_one_out_per_species":
             # Strategy 2: Leave 1 out per species
@@ -86,7 +88,7 @@ class PreprocessingClass:
             print("Invalid hold out strategy selected; raise ValueError.")
             raise ValueError("Invalid hold out strategy selected. Please choose 'leave_one_species_out' or 'leave_one_out_per_species'.")
 
-    def preprocessing(self, data: pd.DataFrame = None):
+    def preprocessing_malus(self, data: pd.DataFrame = None):
         """
         This function preprocesses the data.
         It assigns the target matrix and the feature matrix.
@@ -111,6 +113,41 @@ class PreprocessingClass:
         self.Y_hold_out = self.hold_out_set.iloc[:, 11:]
         print("X_hold_out-shape:", self.X_hold_out.shape)
         print("Y_hold_out-shape:", self.Y_hold_out.shape)
+    
+    def preprocesses_seed_data(self, data: pd.DataFrame = None):
+        """
+        This function preprocesses the data.
+        It assigns the target matrix and the feature matrix.
+        """
+        # self.data.set_index('Species', inplace=True)
+        # self.data.drop(columns=["index"], inplace=True)
+
+        # applying the hold out strategy
+        self.set_hold_out_set()
+
+        # Splitting the dataframe into features and targets
+        self.X = self.data.iloc[:, :68]
+        self.Y = self.data.iloc[:, 68:]
+        print("X-shape:", self.X.shape)
+        print("Y-shape:", self.Y.shape)
+
+        # do same for hold out set
+        self.X_hold_out = self.hold_out_set.iloc[:, :68]
+        self.Y_hold_out = self.hold_out_set.iloc[:, 68:]
+        print("X_hold_out-shape:", self.X_hold_out.shape)
+        print("Y_hold_out-shape:", self.Y_hold_out.shape)
+    
+    def choose_preprocessing_method(self):
+        """
+        Chooses the preprocessing method based on the data source.
+        """
+        if self.data_source == "malus":
+            self.preprocessing_malus()
+        elif self.data_source == "seeds":
+            self.preprocesses_seed_data()
+        else:
+            print("Invalid data source selected; raise ValueError.")
+            raise ValueError("Invalid data source selected. Please choose 'malus' or 'seeds'.")
 
     
     def normalize_microbiome_data(self):
@@ -315,7 +352,7 @@ class PreprocessingClass:
         # set mix_up_x False to only mix up the outputs
         self.mix_up_x = False
 
-        def mixup_data(X, Y, alpha=1.0, mix_up_x=False, degree=100):
+        def mixup_data(X, Y, alpha=1, mix_up_x=False, degree=20):
             '''Helper Function to apply Mixup augmentation to the dataset multiple times.'''
             # Initialize empty lists to store augmented data
             augmented_x_dfs = []
@@ -473,7 +510,7 @@ class PreprocessingClass:
         Runs all methods in the correct order.
         """
         self.load_data()
-        self.preprocessing()
+        self.choose_preprocessing_method()
         self.normalize_microbiome_data()
         self.normalize_X_()
         self.filter_outputs_based_on_scenario()
