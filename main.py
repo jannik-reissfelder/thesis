@@ -35,13 +35,21 @@ for species in sample_distribution.index:
         species_degree_mapping[species] = degree
 print("Species degree mapping:", species_degree_mapping)
 
-# choose algorithm to use
+# initialize an empty dataframe to store the predictions
+predictions_all_species = pd.DataFrame()
+
+# set the algorithm to use
+ALGO_name = "linear_regression"
 
 # Iterate over the all subspecies as holdouts
 # for each subspecies in subspecies we give it to the preprocessor
 for subspecies in df_red.index.unique():
+    # copy the dataframe
+    df_input = df_red.copy()
+    # store the ordering of the columns for later use
+    index_trues = df_red.iloc[:, 68:].loc[subspecies].columns
     print("Hold out subspecies:", subspecies)
-    preprocessor = PreprocessingClass(hold_out_species=subspecies, data=df_red, mapping = species_degree_mapping, use_augmentation=False)
+    preprocessor = PreprocessingClass(hold_out_species=subspecies, data=df_input, mapping = species_degree_mapping, use_augmentation=False)
     preprocessor.run_all_methods()
 
     # get X_train and Y_train for training and prediction
@@ -54,7 +62,7 @@ for subspecies in df_red.index.unique():
     closest_species = preprocessor.closest
 
     # give to trainer class
-    trainer = TrainerClass(x_matrix=X, y_abundance_matrix=Y, x_hold_out=X_hold_out, y_hold_out=Y_hold_out, algorithm="linear_regression", closest_species=closest_species)
+    trainer = TrainerClass(x_matrix=X, y_abundance_matrix=Y, x_hold_out=X_hold_out, y_hold_out=Y_hold_out, algorithm=ALGO_name, closest_species=closest_species)
     trainer.run_train_predict_based_on_algorithm()
     # retrieve predictions and cv_results from trainer
     predictions = trainer.predictions
@@ -68,14 +76,18 @@ for subspecies in df_red.index.unique():
     # transform to dataframe
     non_candidates_abundance_df = pd.DataFrame.from_dict(non_candidates_abundance, orient='index')
     # merge with predictions
-    print(type(predictions)) # numpy.narray
-    print(predictions.shape)
-    print(type(non_candidates_abundance_df)) # pandas dataframe
-    print(non_candidates_abundance_df.shape)
     # transform predictions to dataframe
-    predictions = pd.DataFrame(predictions, index=Y_hold_out.columns)
     predictions_all = pd.concat([predictions, non_candidates_abundance_df])
-    break
+    # sort the predictions
+    predictions_sorted = predictions_all.reindex(index_trues)
+    # rename the column
+    predictions_sorted.columns = [f"predicted_{subspecies}"]
+
+    # append to the predictions_all_species
+    predictions_all_species = pd.concat([predictions_all_species, predictions_sorted], axis=1)
+
+# save the predictions based on the algorithm name
+predictions_all_species.to_csv(f"./predictions/{ALGO_name}_predictions.csv")
 
 
 

@@ -141,7 +141,8 @@ class TrainerClass:
 
         # Predict on the hold-out set
         self.prediction_matrix = self.model.predict(self.X_hold_out)
-        self.predictions = self.prediction_matrix.iloc[0]
+        self.predictions = self.prediction_matrix[0]
+        self.predictions = pd.DataFrame(self.predictions, index=self.Y_hold_out.columns)
 
         # Calculate MSE and RMSE for the hold-out set
         best_model_mse = mean_squared_error(self.Y_hold_out, self.prediction_matrix, multioutput='raw_values')
