@@ -2,6 +2,7 @@
 
 import pandas as pd
 from preprocess import PreprocessingClass
+from trainer_predictor import TrainerClass
 
 
 ## Do some preprocessing which is universal to all models
@@ -20,7 +21,7 @@ species_left = df_red.index.nunique()
 sample_distribution = df_red.index.value_counts()
 ## get mean sample distribution
 mean_sample_distribution = sample_distribution.mean()
-# print("Mean sample distribution:", mean_sample_distribution)
+print("Mean sample distribution:", mean_sample_distribution)
 
 ## set upsampling degree per sepcies
 
@@ -40,28 +41,42 @@ print("Species degree mapping:", species_degree_mapping)
 # for each subspecies in subspecies we give it to the preprocessor
 for subspecies in df_red.index.unique():
     print("Hold out subspecies:", subspecies)
-    preprocessor = PreprocessingClass(hold_out_species="Brassica rapa", data=df_red, mapping = species_degree_mapping, use_augmentation=True)
+    preprocessor = PreprocessingClass(hold_out_species=subspecies, data=df_red, mapping = species_degree_mapping, use_augmentation=False)
     preprocessor.run_all_methods()
 
+    # get X_train and Y_train for training and prediction
     X = preprocessor.X_final
     Y = preprocessor.Y_candidates_final
-    print(Y.index.value_counts())
-    print(Y.index.nunique())
+    # get X_hold_out and Y_hold_out to make predictions
+    X_hold_out = preprocessor.X_hold_out
+    Y_hold_out = preprocessor.Y_candidates_hold_out
+    # get closest species
+    closest_species = preprocessor.closest
 
-
-    
-    # get results and put into tainer class
-
-    # get results and put into evaluator class
+    # give to trainer class
+    trainer = TrainerClass(x_matrix=X, y_abundance_matrix=Y, x_hold_out=X_hold_out, y_hold_out=Y_hold_out, algorithm="linear_regression", closest_species=closest_species)
+    trainer.run_train_predict_based_on_algorithm()
+    # retrieve predictions and cv_results from trainer
+    predictions = trainer.predictions
+    cv_results = trainer.cv_results
+    print("Predictions done for subspecies:", subspecies)
 
     # from preprocessor retrieve non_candidates
     non_candidates = preprocessor.non_candidates
     # make dictionary and assign them all zeros
     non_candidates_abundance = {key: 0 for key in non_candidates}
+    # transform to dataframe
+    non_candidates_abundance_df = pd.DataFrame.from_dict(non_candidates_abundance, orient='index')
+    # merge with predictions
+    print(type(predictions)) # numpy.narray
+    print(predictions.shape)
+    print(type(non_candidates_abundance_df)) # pandas dataframe
+    print(non_candidates_abundance_df.shape)
+    # transform predictions to dataframe
+    predictions = pd.DataFrame(predictions, index=Y_hold_out.columns)
+    predictions_all = pd.concat([predictions, non_candidates_abundance_df])
     break
-    # merge with predictions from candidate micros
-    final_predictions = {**predictions, **non_candidates_abundance}
-    print(len(final_predictions))
+
 
 
 

@@ -84,6 +84,7 @@ class PreprocessingClass:
                  mix_up_x = False                
                  ):
 
+
         self.hold_out_species = hold_out_species
         self.data = data
         self.mapping = mapping
@@ -94,6 +95,7 @@ class PreprocessingClass:
         self.X = None
         self.Y = None
         self.Y_candidates = None
+        self.closest = None
 
 
     def set_hold_out_set(self):
@@ -146,13 +148,15 @@ class PreprocessingClass:
         print("Total number of microbes found:", len(total_micros))
         hold_out_inst = self.X_hold_out.iloc[0]
         # find closest species to hold out species
-        closest = find_closest_species(hold_out_inst, self.candidate_n_neighbors)
-        print("closest species found: ", closest)
-        candidate_rows = self.Y.loc[closest] # this is wrong!!!
+        self.closest = find_closest_species(hold_out_inst, self.candidate_n_neighbors)
+        print("closest species found: ", self.closest)
+        candidate_rows = self.Y.loc[self.closest]
         # determine the candidate micros
         self.candidate_micros = candidate_rows.loc[:, (candidate_rows != 0).any(axis=0)].columns
         # assign the candidate micros to Y_candidates from Y
         self.Y_candidates = self.Y[self.candidate_micros]
+        # also re-assign Y_hold_out to Y_candidates_hold_out
+        self.Y_candidates_hold_out = self.Y_hold_out[self.candidate_micros]
         # get difference between total micros and candidate micros
         self.non_candidates = total_micros - set(self.candidate_micros)
         print("Number of candidate microbes found:", len(self.candidate_micros))
@@ -262,13 +266,12 @@ class PreprocessingClass:
             # concatenate the original data with the augmented data
             self.X_final = pd.concat([self.X, self.mixed_X])
             self.Y_candidates_final = pd.concat([self.Y_candidates, self.mixed_Y])
+            # drop the source columns for both
+            self.X_final.drop(columns=['source'], inplace=True)
+            self.Y_candidates_final.drop(columns=['source'], inplace=True)
 
         else:
             print("Data augmentation not applied; use_augmentation is set to False.")
-            # create a column called 'source' and set it to 'original'
-            self.X['source'] = 'original'
-            self.Y_candidates['source'] = 'original'
-
             # reassing X_final and Y_candidates_final to X and Y_candidates
             self.X_final = self.X
             self.Y_candidates_final = self.Y_candidates
