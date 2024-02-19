@@ -47,10 +47,10 @@ class TrainerClass:
         self.model_param_grid_dict = {
             'linear_regression': {},
             'random_forest': {
-                'estimator__max_depth': [5, 10, 20],
+                'estimator__max_depth': [5, 10],
                 'estimator__max_features': ['sqrt', None],
-                'estimator__min_samples_split': [2, 4],
-                'estimator__min_samples_leaf': [1, 2]
+                'estimator__min_samples_split': [2],
+                'estimator__min_samples_leaf': [1]
             },
             'elastic_net': {
                 'estimator__alpha': [0.5, 1, 2],
@@ -155,6 +155,7 @@ class TrainerClass:
     def run_knn_model(self):
         # from closest species get the first 3 species
         self.n_knn = self.closest_species[:self.n_neighbors]
+        print(self.n_knn)
         # locate the rows of the closest species
         self.Y_knn = self.Y_target_abundance.loc[self.n_knn]
         # predict the mean abundance for each target variable based on the closest species

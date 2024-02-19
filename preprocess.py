@@ -140,8 +140,9 @@ class PreprocessingClass:
         total_micros = set(self.Y.columns)
         print("Total number of microbes found:", len(total_micros))
         hold_out_inst = self.X_hold_out.iloc[0]
+        candidate_neighbors = hold_out_inst[self.X.index.unique()]
         # find closest species to hold out species
-        self.closest = find_closest_species(hold_out_inst, self.candidate_n_neighbors)
+        self.closest = find_closest_species(candidate_neighbors, self.candidate_n_neighbors)
         print("closest species found: ", self.closest)
         candidate_rows = self.Y.loc[self.closest]
         # determine the candidate micros

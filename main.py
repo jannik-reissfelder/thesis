@@ -39,15 +39,15 @@ print("Species degree mapping:", species_degree_mapping)
 predictions_all_species = pd.DataFrame()
 
 # set the algorithm to use
-ALGO_name = "linear_regression"
+ALGO_name = "random_forest"
 
 # Iterate over the all subspecies as holdouts
 # for each subspecies in subspecies we give it to the preprocessor
 for subspecies in df_red.index.unique():
-    # copy the dataframe
-    df_input = df_red.copy()
     # store the ordering of the columns for later use
     index_trues = df_red.iloc[:, 68:].loc[subspecies].columns
+    # copy the dataframe
+    df_input = df_red.copy()
     print("Hold out subspecies:", subspecies)
     preprocessor = PreprocessingClass(hold_out_species=subspecies, data=df_input, mapping = species_degree_mapping, use_augmentation=False)
     preprocessor.run_all_methods()
@@ -88,6 +88,8 @@ for subspecies in df_red.index.unique():
 
 # save the predictions based on the algorithm name
 predictions_all_species.to_csv(f"./predictions/{ALGO_name}_predictions.csv")
+print("Predictions saved")
+print("Process done!")
 
 
 
