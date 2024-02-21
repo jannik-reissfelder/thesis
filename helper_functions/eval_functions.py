@@ -1,5 +1,8 @@
 import pandas as pd
 import numpy as np
+import plotly.express as px
+from sklearn.decomposition import PCA
+from skbio.stats.ordination import pcoa
 
 
 # Function to calculate Bray-Curtis dissimilarity between two samples
@@ -105,4 +108,96 @@ def plot_heatmap(distance_df, title='Distance Matrix Heatmap', annotations=True)
     # Show the plot
     plt.show()
 
+
+def perform_pca_and_visualize(df, filtered_df):
+    """
+    Performs PCA on the given DataFrame and a filtered version of it, then visualizes the results.
+
+    Parameters:
+    - df: DataFrame, the original dataset.
+    - filtered_df: DataFrame, a filtered version of the original dataset for prediction.
+
+    Returns:
+    - None, but displays a Plotly scatter plot.
+    """
+    num_components = 2
+
+    pca = PCA(n_components=num_components)
+    pca_result = pca.fit_transform(df)  # Project original points
+    pca_result_pred = pca.transform(filtered_df)  # Transform predictions into the same space
+    pca_result_all = np.concatenate([pca_result, pca_result_pred])  # Concatenate results
+
+    # Create a DataFrame for the PCA results
+    pca_df = pd.DataFrame(pca_result_all, columns=['PC1', 'PC2'])
+    pca_df['sample'] = df.index.tolist() + filtered_df.index.tolist()
+
+    # Calculate the percentage of variance explained by each component
+    explained_var = pca.explained_variance_ratio_ * 100
+
+    # Create an interactive scatter plot
+    fig = px.scatter(pca_df, x='PC1', y='PC2', text=None, color="sample",
+                     title=f'PCA of Data (PC1: {explained_var[0]:.2f}%, PC2: {explained_var[1]:.2f}%)',
+                     color_discrete_sequence=px.colors.qualitative.Plotly)
+
+    fig.update_traces(textposition='top center')
+    fig.update_layout(height=600, width=1200)
+
+    fig.show()
+
+
+
+def plot_sorted_df_line_distribution(df_plot):
+    plt.figure(figsize=(15, 10))  # Increased figure size for better clarity
+
+    # Sort the DataFrame based on the values of the first row
+    sorted_columns = df_plot.iloc[0].sort_values(ascending=False).index
+    sorted_df = df_plot[sorted_columns].iloc[:, :300] # TODO: this is just for the first 200 columns
+
+    for index, row in sorted_df.iterrows():
+        # Plot each row of the sorted DataFrame
+        plt.plot(row.values, label=f'Row {index}', linestyle='-', linewidth=1.5)
+
+    plt.title('Line Graph of Each Row After Sorting Based on First Row')
+    plt.xlabel('Column Index (Sorted)')
+    plt.ylabel('Value')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+
+def perform_pcoa_and_visualize(matrix):
+    """
+    Performs PCoA on the given distance matrix and visualizes the results.
+
+    Parameters:
+    - matrix: DataFrame, the distance matrix (e.g., Bray-Curtis distance matrix).
+    - index_new: Index, the new index to be used for samples in the visualization.
+
+    Returns:
+    - None, but displays a Plotly scatter plot.
+    """
+    # Perform PCoA
+    pcoa_results = pcoa(matrix)
+
+    # Get the PCoA coordinates
+    pcoa_coords = pcoa_results.samples[['PC1', 'PC2']]
+    pcoa_coords.set_index(matrix.index, inplace=True)
+
+    # Convert the index to a column for easy plotting
+    pcoa_coords['sample_detail'] = pcoa_coords.index
+
+    # Create an interactive scatter plot
+    fig = px.scatter(pcoa_coords, x='PC1', y='PC2', text=None, color="sample_detail",
+                     title='PCoA of Microbiome Data',
+                     labels={
+                         'PC1': f"PC1 - {pcoa_results.proportion_explained['PC1']*100:.2f}%",
+                         'PC2': f"PC2 - {pcoa_results.proportion_explained['PC2']*100:.2f}%"
+                     })
+
+    # Optional: Adjust layout for better readability or aesthetics
+    fig.update_traces(marker=dict(size=5), selector=dict(mode='markers+text'))
+    fig.update_layout(height=600, width=1000, legend_title_text='Species')
+
+    fig.show()
 
