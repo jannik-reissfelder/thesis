@@ -8,7 +8,8 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.multioutput import MultiOutputRegressor
 import pandas as pd
 from sklearn.model_selection import GridSearchCV
-
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
 
 class TrainerClass:
     def __init__(self,
@@ -40,7 +41,8 @@ class TrainerClass:
             'linear_regression': LinearRegression(),
             'random_forest': RandomForestRegressor(random_state=42),
             'elastic_net': ElasticNet(random_state=42),
-            'gpr': GaussianProcessRegressor(random_state=42),
+            'gpr': GaussianProcessRegressor(kernel=C(1.0, (1e-4, 1e3)) * RBF(10, (1e-3, 1e3)),
+                                alpha=0.1, n_restarts_optimizer=10, normalize_y=False, random_state=42),
         }
 
         # define parameter grid for each model
@@ -107,7 +109,7 @@ class TrainerClass:
         grid_search.fit(self.X_input_matrix, self.Y_target_abundance)
 
         # Best parameters and scores
-        print("Best parameters found: ", grid_search.best_params_)
+        print("Cross-Validation Done")
         self.model = grid_search.best_estimator_
 
         # Calculate and store MSE and RMSE scores
@@ -135,22 +137,45 @@ class TrainerClass:
 
         """
 
-        # Assuming self.model is already the best estimator from GridSearchCV
-        # Fit the model on the entire dataset (self.X_input_matrix, self.Y_target_abundance)
-        self.model.fit(self.X_input_matrix, self.Y_target_abundance)
+        if self.algorithm == "gpr":
+            self.model = self.model_regression_dict[self.algorithm]
+            print("Best parameters found for GPR: ", self.model.get_params())
+            self.model.fit(self.X_input_matrix, self.Y_target_abundance)
+            self.prediction_matrix, self.sigma = self.model.predict(self.X_hold_out, return_std=True)
+            self.predictions = self.prediction_matrix[0]
+            self.upper_confidence = self.prediction_matrix[0] + 1.96 * self.sigma[0]
+            self.lower_confidence = self.prediction_matrix[0] - 1.96 * self.sigma[0]
 
-        # Predict on the hold-out set
-        self.prediction_matrix = self.model.predict(self.X_hold_out)
-        self.predictions = self.prediction_matrix[0]
-        self.predictions = pd.DataFrame(self.predictions, index=self.Y_hold_out.columns)
+            # storing predictions in a dataframe
+            self.predictions = pd.DataFrame(self.predictions, index=self.Y_hold_out.columns)
 
-        # Calculate MSE and RMSE for the hold-out set
-        best_model_mse = mean_squared_error(self.Y_hold_out, self.prediction_matrix, multioutput='raw_values')
-        best_model_rmse = np.sqrt(best_model_mse)
+            # store upper and lower confidence in a dataframe
+            self.gpr_predictions_confidence = pd.DataFrame({
+                'prediction': self.prediction_matrix[0],
+                'lower_bound_95': self.lower_confidence,
+                'upper_bound_95': self.upper_confidence,
+            }, index=self.Y_hold_out.columns)
 
-        # Optionally, print or return the evaluation metrics
-        print("MSE on hold-out set:", best_model_mse)
-        print("RMSE on hold-out set:", best_model_rmse)
+
+        else:
+            print("Best parameters found for final model: ", self.model.get_params())
+            print("Best estimator found for final model: ", self.model.estimator)
+            # Assuming self.model is already the best estimator from GridSearchCV
+            # Fit the model on the entire dataset (self.X_input_matrix, self.Y_target_abundance)
+            self.model.fit(self.X_input_matrix, self.Y_target_abundance)
+
+            # Predict on the hold-out set
+            self.prediction_matrix = self.model.predict(self.X_hold_out)
+            self.predictions = self.prediction_matrix[0]
+            self.predictions = pd.DataFrame(self.predictions, index=self.Y_hold_out.columns)
+
+            # Calculate MSE and RMSE for the hold-out set
+            best_model_mse = mean_squared_error(self.Y_hold_out, self.prediction_matrix, multioutput='raw_values')
+            best_model_rmse = np.sqrt(best_model_mse)
+
+            # Optionally, print or return the evaluation metrics
+            print("MSE on hold-out set:", best_model_mse)
+            print("RMSE on hold-out set:", best_model_rmse)
 
     def run_knn_model(self):
         # from closest species get the first 3 species
