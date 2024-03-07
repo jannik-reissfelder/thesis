@@ -1,6 +1,7 @@
 ### Main Script to run the entire pipeline
 
 import pandas as pd
+from sklearn.linear_model import LogisticRegression
 from preprocess import PreprocessingClass
 from trainer_predictor import TrainerClass
 
@@ -14,7 +15,7 @@ def remove_species_with_less_than_2_samples(data):
 
 df_red = remove_species_with_less_than_2_samples(df)
 species_left = df_red.index.nunique()
-# print("Number of species left:", species_left)
+print("Number of species left:", species_left)
 
 
 ## get sample distribution
@@ -53,7 +54,7 @@ for subspecies in df_red.index.unique():
     # copy the dataframe
     df_input = df_red.copy()
     print("Hold out subspecies:", subspecies)
-    preprocessor = PreprocessingClass(hold_out_species=subspecies, data=df_input, mapping = species_degree_mapping, use_augmentation=False)
+    preprocessor = PreprocessingClass(hold_out_species=subspecies, data=df_input, mapping = species_degree_mapping, use_augmentation=AUGMENTATION)
     preprocessor.run_all_methods()
 
     # get X_train and Y_train for training and prediction
@@ -66,7 +67,7 @@ for subspecies in df_red.index.unique():
     closest_species = preprocessor.closest
 
     # give to trainer class
-    trainer = TrainerClass(x_matrix=X, y_abundance_matrix=Y, x_hold_out=X_hold_out, y_hold_out=Y_hold_out, algorithm=ALGO_name, closest_species=closest_species)
+    trainer = TrainerClass(x_matrix=X, y_abundance_matrix=Y, x_hold_out=X_hold_out, y_hold_out=Y_hold_out, algorithm=ALGO_NAME, closest_species=closest_species)
     trainer.run_train_predict_based_on_algorithm()
     # retrieve predictions and cv_results from trainer
     predictions = trainer.predictions
@@ -91,7 +92,7 @@ for subspecies in df_red.index.unique():
     predictions_all_species = pd.concat([predictions_all_species, predictions_sorted], axis=1)
 
 # save the predictions based on the algorithm name
-predictions_all_species.to_csv(f"./predictions/{ALGO_name}_predictions.csv")
+predictions_all_species.to_csv(f"./predictions/{AUGMENTATION_PATH}/{ALGO_NAME}_predictions.csv")
 print("Predictions saved")
 print("Process done!")
 
