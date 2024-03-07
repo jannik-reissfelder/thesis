@@ -39,7 +39,11 @@ print("Species degree mapping:", species_degree_mapping)
 predictions_all_species = pd.DataFrame()
 
 # set the algorithm to use
-ALGO_name = "random_forest"
+ALGO_NAME = "knn"
+# set augmentation to use
+AUGMENTATION = True
+# set the path to save according to the augmentation
+AUGMENTATION_PATH = "non-augmentation" if not AUGMENTATION else "augmentation"
 
 # Iterate over the all subspecies as holdouts
 # for each subspecies in subspecies we give it to the preprocessor
@@ -92,7 +96,43 @@ print("Predictions saved")
 print("Process done!")
 
 
+def filter_targets(df_y):
+    """
+    This function filters the target space based on LogisticRegression.
+    Its a mechanism of pre-fitlering and determining presence or absenceprior to regression
+    """
+    # make Y dataframe binary
+    Y_binary = df_y.map(lambda x: 1 if x > 0 else 0)
+    # iterate over targets and fit a logistic regression
+    targets = Y_binary.columns
+    # initialize an empty dataframe to store the predictions
+    predictions_all_species = {}
 
+    for i, target in enumerate(targets):
+        print("Training model for target:", target, "Number:", i + 1, "out of", len(targets))
+        model = LogisticRegression()
+
+        # Fit the model on your training data
+        model.fit(X, Y_binary[target])
+
+        # Get predicted probabilities for the positive class (1)
+        predicted_probabilities = model.predict_proba(X_hold_out)[:, 1]
+
+        # Apply custom threshold to determine class labels
+        custom_threshold = 0.5
+        predictions_custom_threshold = (predicted_probabilities >= custom_threshold).astype(int)
+
+        # store
+        pred = predictions_custom_threshold[0]
+        predictions_all_species[target] = pred
+
+    # transform the predictions to a dataframe
+    predictions_all_species = pd.DataFrame(predictions_all_species, index=[0])
+    presence_df = predictions_all_species.T
+    # rename column to "presence"
+    presence_df.columns = ["presence"]
+    present_micros = presence_df[presence_df["presence"] == 1].index
+    return present_micros, len(present_micros)
 
 
 
