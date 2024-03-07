@@ -3,11 +3,9 @@
 
 
 # handle imports
-import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from sklearn.decomposition import PCA
-from gurobipy import Model, GRB, quicksum
 import time
 
 
@@ -257,6 +255,9 @@ class PreprocessingClass:
             # drop the source columns for both
             self.X_final.drop(columns=['source'], inplace=True)
             self.Y_candidates_final.drop(columns=['source'], inplace=True)
+            # print final shapes
+            print("X_final-shape:", self.X_final.shape)
+            print("Y_candidates_final-shape:", self.Y_candidates_final.shape)
 
         else:
             print("Data augmentation not applied; use_augmentation is set to False.")
