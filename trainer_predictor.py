@@ -2,6 +2,7 @@
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import mean_squared_error
 import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
 from sklearn.linear_model import LinearRegression, ElasticNet
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.gaussian_process import GaussianProcessRegressor
@@ -38,18 +39,24 @@ class TrainerClass:
 
         self.model_regression_dict = {
 
+            'knn': KNeighborsRegressor(n_jobs=-1),
             'linear_regression': LinearRegression(),
-            'random_forest': RandomForestRegressor(random_state=42),
+            'random_forest': RandomForestRegressor(random_state=42, n_jobs=-1),
             'elastic_net': ElasticNet(random_state=42),
-            'gpr': GaussianProcessRegressor(kernel=C(1.0, (1e-4, 1e3)) * RBF(10, (1e-3, 1e3)),
-                                alpha=0.1, n_restarts_optimizer=10, normalize_y=False, random_state=42),
+            'gpr': GaussianProcessRegressor(kernel=C(1.0, (1e-2, 1e2)) * RBF(10, (1e-2, 1e2)),
+                                alpha=0.1, n_restarts_optimizer=3, normalize_y=False, random_state=42),
         }
 
         # define parameter grid for each model
         self.model_param_grid_dict = {
             'linear_regression': {},
+            'knn': {
+                'n_neighbors': [5, 7, 10, 15, 20],
+                'weights': ['uniform', 'distance'],
+                'p': [1, 2]
+            },
             'random_forest': {
-                'estimator__max_depth': [5, 10],
+                'estimator__max_depth': [3, 5, 8],
                 'estimator__max_features': ['sqrt', None],
                 'estimator__min_samples_split': [2],
                 'estimator__min_samples_leaf': [1]
@@ -59,8 +66,8 @@ class TrainerClass:
                 'estimator__l1_ratio': [0.3, 0.5, 0.7]
             },
             'gpr': {
-                'estimator__n_restarts_optimizer': [0, 1, 2, 3, 4, 5],
-                'estimator__normalize_y': [True, False]
+                'estimator__n_restarts_optimizer': [3],
+                'estimator__normalize_y': [False]
             },
         }
 
@@ -85,7 +92,7 @@ class TrainerClass:
         initialize model
         :return:
         """
-        self.model = MultiOutputRegressor(self.model_regression_dict[self.algorithm])
+        self.model = MultiOutputRegressor(self.model_regression_dict[self.algorithm], n_jobs=-1) if self.algorithm != "knn" else self.model_regression_dict[self.algorithm]
         print("model in use: ", self.model)
 
     def cross_validation(self):
@@ -117,9 +124,6 @@ class TrainerClass:
         self.cv_mse_scores = -self.cv_results['mean_test_score']  # Scores are negative MSE
         self.cv_rmse_scores = np.sqrt(self.cv_mse_scores)
 
-        # Report
-        print("Cross-validation MSE scores: ", self.cv_mse_scores)
-        print("Cross-validation RMSE scores: ", self.cv_rmse_scores)
 
     def fit_predict_best_model(self):
         """
@@ -159,7 +163,7 @@ class TrainerClass:
 
         else:
             print("Best parameters found for final model: ", self.model.get_params())
-            print("Best estimator found for final model: ", self.model.estimator)
+
             # Assuming self.model is already the best estimator from GridSearchCV
             # Fit the model on the entire dataset (self.X_input_matrix, self.Y_target_abundance)
             self.model.fit(self.X_input_matrix, self.Y_target_abundance)
@@ -173,9 +177,6 @@ class TrainerClass:
             best_model_mse = mean_squared_error(self.Y_hold_out, self.prediction_matrix, multioutput='raw_values')
             best_model_rmse = np.sqrt(best_model_mse)
 
-            # Optionally, print or return the evaluation metrics
-            print("MSE on hold-out set:", best_model_mse)
-            print("RMSE on hold-out set:", best_model_rmse)
 
     def run_knn_model(self):
         # from closest species get the first 3 species
@@ -185,7 +186,7 @@ class TrainerClass:
         self.Y_knn = self.Y_target_abundance.loc[self.n_knn]
         # predict the mean abundance for each target variable based on the closest species
         mean_abundance_nn = self.Y_knn.groupby(self.Y_knn.index).mean()
-        self.predictions = mean_abundance_nn.mean()
+        self.predictions = pd.DataFrame(mean_abundance_nn.mean())
 
 
 
@@ -193,7 +194,7 @@ class TrainerClass:
         """
         Run the entire training and prediction process based on the chosen algorithm.
         """
-        if self.algorithm != "knn":
+        if self.algorithm != "knn_":
             self.cross_validation()
             self.fit_predict_best_model()
         else:
