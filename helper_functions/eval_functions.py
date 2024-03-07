@@ -3,7 +3,7 @@ import numpy as np
 import plotly.express as px
 from sklearn.decomposition import PCA
 from skbio.stats.ordination import pcoa
-
+from scipy.stats import wasserstein_distance
 
 # Function to calculate Bray-Curtis dissimilarity between two samples
 def compute_BC_dissimilarity(sample1, sample2):
@@ -18,23 +18,6 @@ def compute_BC_dissimilarity(sample1, sample2):
     dissimilarity = 1 - (2 * min_sum) / (sum_sample1 + sum_sample2)
 
     return dissimilarity
-
-
-from scipy.stats import wasserstein_distance
-
-
-def compute_wasserstein(s_i, s_j):
-    """
-    Compute the Wasserstein distance between two samples.
-
-    Parameters:
-    s_i (np.array): The abundance profile of sample i.
-    s_j (np.array): The abundance profile of sample j.
-
-    Returns:
-    float: The Wasserstein distance between the two samples.
-    """
-    return wasserstein_distance(s_i, s_j)
 
 
 from scipy.spatial.distance import jensenshannon
@@ -71,7 +54,7 @@ def compute_distance_matrix(df, metric='wasserstein'):
     for i in range(num_samples):
         for j in range(num_samples):
             if metric == 'wasserstein':
-                distance_matrix[i, j] = compute_wasserstein(df.iloc[i, :], df.iloc[j, :])
+                distance_matrix[i, j] = calculate_wasserstein_with_normalization(df.iloc[i, :], df.iloc[j, :])
             elif metric == 'jensen-shannon':
                 distance_matrix[i, j] = compute_JS_divergence(df.iloc[i, :], df.iloc[j, :])
             elif metric == 'bray-curtis':
@@ -201,3 +184,64 @@ def perform_pcoa_and_visualize(matrix):
 
     fig.show()
 
+
+def calculate_bhattacharyya_with_normalization(a, b):
+    """
+    Calculates the Bhattacharyya coefficient and Bhattacharyya distance between two raw abundance profiles,
+    with internal normalization to probability distributions.
+
+    Parameters:
+    a (array-like): Raw abundance counts for sample A.
+    b (array-like): Raw abundance counts for sample B.
+
+    Returns:
+    float: The Bhattacharyya coefficient.
+    float: The Bhattacharyya distance.
+    """
+    # Convert to numpy arrays for convenience and normalize to probability distributions
+    a = np.array(a, dtype=float)
+    b = np.array(b, dtype=float)
+
+    total_a = np.sum(a)
+    total_b = np.sum(b)
+
+    # Avoid division by zero
+    prob_a = a / total_a if total_a > 0 else a
+    prob_b = b / total_b if total_b > 0 else b
+
+    # Calculate the Bhattacharyya coefficient
+    BC = np.sum(np.sqrt(prob_a * prob_b))
+
+    # Calculate the Bhattacharyya distance
+    BD = -np.log(BC) if BC > 0 else float('inf')  # Handle the case where BC is 0
+
+    return BC, BD
+
+
+def calculate_wasserstein_with_normalization(a, b):
+    """
+    Calculates the Wasserstein distance between two raw abundance profiles,
+    with internal normalization to probability distributions.
+
+    Parameters:
+    a (array-like): Raw abundance profile for sample A.
+    b (array-like): Raw abundance profile for sample B.
+
+    Returns:
+    float: The Wasserstein distance.
+    """
+    # Convert to numpy arrays for convenience
+    a = np.array(a, dtype=float)
+    b = np.array(b, dtype=float)
+
+    # Normalize the profiles to probability distributions
+    total_a = np.sum(a)
+    total_b = np.sum(b)
+
+    # Avoid division by zero
+    norm_a = a / total_a if total_a > 0 else a
+    norm_b = b / total_b if total_b > 0 else b
+
+    # Calculate and return the Wasserstein distance
+    distance = wasserstein_distance(norm_a, norm_b)
+    return distance
