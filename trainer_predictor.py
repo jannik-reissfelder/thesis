@@ -20,7 +20,6 @@ class TrainerClass:
                  y_hold_out: pd.DataFrame,
                  algorithm: str,
                  closest_species: list,
-                 n_neighbors: int = 3,
 
                  ):
 
@@ -30,7 +29,6 @@ class TrainerClass:
         self.X_hold_out = x_hold_out
         self.Y_hold_out = y_hold_out
         self.closest_species = closest_species
-        self.n_neighbors = n_neighbors # this is internally used by the KNN model
         self.model = None
         self.cv_results = None
         self.cv_mse_scores = None
@@ -51,13 +49,13 @@ class TrainerClass:
         self.model_param_grid_dict = {
             'linear_regression': {},
             'knn': {
-                'n_neighbors': [5, 7, 10, 15, 20],
+                'n_neighbors': [3, 5, 7, 10, 15, 20],
                 'weights': ['uniform', 'distance'],
                 'p': [1, 2]
             },
             'random_forest': {
-                'estimator__max_depth': [3, 5, 8],
-                'estimator__max_features': ['sqrt', None],
+                'estimator__max_depth': [3, 5, 8, 10, 15],
+                'estimator__max_features': ['sqrt'],
                 'estimator__min_samples_split': [2],
                 'estimator__min_samples_leaf': [1]
             },
@@ -82,7 +80,7 @@ class TrainerClass:
         species_to_int = {name: i for i, name in enumerate(unique_species)}
         stratify_labels = np.array([species_to_int[specie] for specie in species])
 
-        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        skf = StratifiedKFold(n_splits=2, shuffle=True, random_state=42)
         stratified_folds = list(skf.split(self.X_input_matrix, stratify_labels))
 
         return stratified_folds
@@ -95,6 +93,7 @@ class TrainerClass:
         self.model = MultiOutputRegressor(self.model_regression_dict[self.algorithm], n_jobs=-1) if self.algorithm != "knn" else self.model_regression_dict[self.algorithm]
         print("model in use: ", self.model)
 
+
     def cross_validation(self):
         """
         Perform cross-validation with grid search and stratified splits.
@@ -102,8 +101,14 @@ class TrainerClass:
         # Initialize model
         self.initialize_model()
 
+        if self.algorithm == "knn":
+            # aggreagte the species to get the mean abundance
+            self.Y_target_abundance = self.Y_target_abundance.groupby(self.Y_target_abundance.index).mean()
+            # same for the X_input_matrix
+            self.X_input_matrix = self.X_input_matrix.groupby(self.X_input_matrix.index).mean()
+
         # Create stratified folds
-        stratified_folds = self.create_stratified_folds()
+        stratified_folds = self.create_stratified_folds() if self.algorithm != "knn" else 2
 
         # GridSearchCV with custom cv parameter
         grid_search = GridSearchCV(estimator=self.model,
@@ -178,24 +183,11 @@ class TrainerClass:
             best_model_rmse = np.sqrt(best_model_mse)
 
 
-    def run_knn_model(self):
-        # from closest species get the first 3 species
-        self.n_knn = self.closest_species[:self.n_neighbors]
-        print(self.n_knn)
-        # locate the rows of the closest species
-        self.Y_knn = self.Y_target_abundance.loc[self.n_knn]
-        # predict the mean abundance for each target variable based on the closest species
-        mean_abundance_nn = self.Y_knn.groupby(self.Y_knn.index).mean()
-        self.predictions = pd.DataFrame(mean_abundance_nn.mean())
-
-
 
     def run_train_predict_based_on_algorithm(self):
         """
         Run the entire training and prediction process based on the chosen algorithm.
         """
-        if self.algorithm != "knn_":
-            self.cross_validation()
-            self.fit_predict_best_model()
-        else:
-            self.run_knn_model()
+        self.cross_validation()
+        self.fit_predict_best_model()
+

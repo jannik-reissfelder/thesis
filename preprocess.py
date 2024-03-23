@@ -78,7 +78,7 @@ class PreprocessingClass:
                  data: pd.DataFrame,
                  use_augmentation: bool = False,
                  use_normalized_data: str = "absolute",
-                 candidate_n_neighbors: int = 6,
+                 candidate_n_neighbors: int = 80,
                  mix_up_x=False
                  ):
 
@@ -102,9 +102,9 @@ class PreprocessingClass:
         self.data.drop(columns=[self.hold_out_species], inplace=True)
         # removing the  hold out  species from the row data
         # first assign it to the hold_out_set
-        self.hold_out_set = self.data.loc[self.hold_out_species]
+        self.hold_out_set = self.data.loc[[self.hold_out_species]]
         # removing the hold out species from the data
-        self.data.drop(self.data.loc[self.hold_out_species].index, inplace=True)
+        self.data.drop(self.data.loc[[self.hold_out_species]].index, inplace=True)
         print("Hold out set shape:", self.hold_out_set.shape)
         print("Data shape after hold out:", self.data.shape)
 
@@ -144,7 +144,8 @@ class PreprocessingClass:
         print("closest species found: ", self.closest)
         candidate_rows = self.Y.loc[self.closest]
         # determine the candidate micros
-        self.candidate_micros = candidate_rows.loc[:, (candidate_rows != 0).any(axis=0)].columns
+        # self.candidate_micros = candidate_rows.loc[:, (candidate_rows != 0).any(axis=0)].columns # TODO enable when using this logic again
+        self.candidate_micros = self.Y.columns # this is just getting all of them again
         # assign the candidate micros to Y_candidates from Y
         self.Y_candidates = self.Y[self.candidate_micros]
         # also re-assign Y_hold_out to Y_candidates_hold_out

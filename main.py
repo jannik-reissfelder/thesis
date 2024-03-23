@@ -4,45 +4,84 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from preprocess import PreprocessingClass
 from trainer_predictor import TrainerClass
+import numpy as np
 
 
 ## Do some preprocessing which is universal to all models
 df = pd.read_parquet("./data/Seeds/60_seeds_CSS_merged.gz")
 
-def remove_species_with_less_than_2_samples(data):
-    species_to_keep = data.index.value_counts()[data.index.value_counts() >= 2].index
-    return data.loc[species_to_keep]
 
-df_red = remove_species_with_less_than_2_samples(df)
-species_left = df_red.index.nunique()
-print("Number of species left:", species_left)
+# Function to calculate the coefficient of variation
+def calculate_cv(data):
+    if np.mean(data) == 0:
+        return np.nan  # Avoid division by zero
+    return np.std(data, ddof=1) / np.mean(data)
+
+def filter_targets(df_raw):
+    df_quantile = df_raw.iloc[:, 68:].groupby(df_raw.index).quantile(0.85)
+    candidates = df_quantile.drop(columns=[col for col in df_quantile.columns if df_quantile[col].eq(0).all()]).columns
+    df_interim = df_raw[candidates]
+    # Initialize an empty dictionary to store core microbiome data
+    core_microbiome = {}
+
+    for species in df_interim.index.unique():
+        # Subset DataFrame by species, excluding the species column
+        subset = df_interim.loc[[species]]
+
+        # Calculate variability (CV) for each microorganism within this species
+        variability = subset.apply(calculate_cv)
+
+        # Filter based on a threshold, e.g., CV < 0.5 for low variability
+        core_microbes = variability[variability < 0.5].index.tolist()
+
+        # Store the core microorganisms in the dictionary
+        core_microbiome[species] = core_microbes
+
+        # Flatten the list of all microorganisms from the core microbiome of all species
+        all_core_microorganisms = [microbe for microbes in core_microbiome.values() for microbe in microbes]
+
+        # Convert the list to a set to remove duplicates, getting the unique set of core microorganisms
+        unique_core_microorganisms = set(all_core_microorganisms)
+
+        df_output = pd.concat([df_raw.iloc[:, :68], df_raw[list(unique_core_microorganisms)]], axis=1)
+
+    return df_output, unique_core_microorganisms
+
+
+
 
 
 ## get sample distribution
-sample_distribution = df_red.index.value_counts()
+sample_distribution = df.index.value_counts()
 ## get mean sample distribution
 mean_sample_distribution = sample_distribution.mean()
 print("Mean sample distribution:", mean_sample_distribution)
+print("Median sample distribution:", sample_distribution.median())
 
 ## set upsampling degree per sepcies
-
 species_degree_mapping = {}
 for species in sample_distribution.index:
-    if sample_distribution[species] < mean_sample_distribution:
+    if sample_distribution[species] < int(mean_sample_distribution) + 1:
         degree = mean_sample_distribution / sample_distribution[species]
         # print(species, distribution[species], degree)
         # make degree an integer round to next integer
         degree = int(degree) + 1
         species_degree_mapping[species] = degree
-print("Species degree mapping:", species_degree_mapping)
+# print("Species degree mapping:", species_degree_mapping)
+
+
+df_red, microbes_left = filter_targets(df)
+print("Number Microbes left:", len(microbes_left))
+print("Number of sample plant species left:", df_red.index.nunique())
+
 
 # initialize an empty dataframe to store the predictions
 predictions_all_species = pd.DataFrame()
 
 # set the algorithm to use
-ALGO_NAME = "knn"
+ALGO_NAME = "random_forest"
 # set augmentation to use
-AUGMENTATION = True
+AUGMENTATION = False
 # set the path to save according to the augmentation
 AUGMENTATION_PATH = "non-augmentation" if not AUGMENTATION else "augmentation"
 
@@ -50,11 +89,11 @@ AUGMENTATION_PATH = "non-augmentation" if not AUGMENTATION else "augmentation"
 # for each subspecies in subspecies we give it to the preprocessor
 for subspecies in df_red.index.unique():
     # store the ordering of the columns for later use
-    index_trues = df_red.iloc[:, 68:].loc[subspecies].columns
+    index_trues = df_red.iloc[:, 68:].loc[[subspecies]].columns
     # copy the dataframe
     df_input = df_red.copy()
     print("Hold out subspecies:", subspecies)
-    preprocessor = PreprocessingClass(hold_out_species=subspecies, data=df_input, mapping = species_degree_mapping, use_augmentation=AUGMENTATION)
+    preprocessor = PreprocessingClass(hold_out_species=subspecies, data=df_input, mapping=species_degree_mapping, use_augmentation=AUGMENTATION)
     preprocessor.run_all_methods()
 
     # get X_train and Y_train for training and prediction
@@ -66,6 +105,7 @@ for subspecies in df_red.index.unique():
     # get closest species
     closest_species = preprocessor.closest
 
+
     # give to trainer class
     trainer = TrainerClass(x_matrix=X, y_abundance_matrix=Y, x_hold_out=X_hold_out, y_hold_out=Y_hold_out, algorithm=ALGO_NAME, closest_species=closest_species)
     trainer.run_train_predict_based_on_algorithm()
@@ -73,18 +113,10 @@ for subspecies in df_red.index.unique():
     predictions = trainer.predictions
     cv_results = trainer.cv_results
     print("Predictions done for subspecies:", subspecies)
+    print(predictions.shape)
 
-    # from preprocessor retrieve non_candidates
-    non_candidates = preprocessor.non_candidates
-    # make dictionary and assign them all zeros
-    non_candidates_abundance = {key: 0 for key in non_candidates}
-    # transform to dataframe
-    non_candidates_abundance_df = pd.DataFrame.from_dict(non_candidates_abundance, orient='index')
-    # merge with predictions
-    # transform predictions to dataframe
-    predictions_all = pd.concat([predictions, non_candidates_abundance_df])
     # sort the predictions
-    predictions_sorted = predictions_all.reindex(index_trues)
+    predictions_sorted = predictions.reindex(index_trues)
     # rename the column
     predictions_sorted.columns = [f"predicted_{subspecies}"]
 
@@ -95,45 +127,6 @@ for subspecies in df_red.index.unique():
 predictions_all_species.to_csv(f"./predictions/{AUGMENTATION_PATH}/{ALGO_NAME}_predictions.csv")
 print("Predictions saved")
 print("Process done!")
-
-
-def filter_targets(df_y):
-    """
-    This function filters the target space based on LogisticRegression.
-    Its a mechanism of pre-fitlering and determining presence or absenceprior to regression
-    """
-    # make Y dataframe binary
-    Y_binary = df_y.map(lambda x: 1 if x > 0 else 0)
-    # iterate over targets and fit a logistic regression
-    targets = Y_binary.columns
-    # initialize an empty dataframe to store the predictions
-    predictions_all_species = {}
-
-    for i, target in enumerate(targets):
-        print("Training model for target:", target, "Number:", i + 1, "out of", len(targets))
-        model = LogisticRegression()
-
-        # Fit the model on your training data
-        model.fit(X, Y_binary[target])
-
-        # Get predicted probabilities for the positive class (1)
-        predicted_probabilities = model.predict_proba(X_hold_out)[:, 1]
-
-        # Apply custom threshold to determine class labels
-        custom_threshold = 0.5
-        predictions_custom_threshold = (predicted_probabilities >= custom_threshold).astype(int)
-
-        # store
-        pred = predictions_custom_threshold[0]
-        predictions_all_species[target] = pred
-
-    # transform the predictions to a dataframe
-    predictions_all_species = pd.DataFrame(predictions_all_species, index=[0])
-    presence_df = predictions_all_species.T
-    # rename column to "presence"
-    presence_df.columns = ["presence"]
-    present_micros = presence_df[presence_df["presence"] == 1].index
-    return present_micros, len(present_micros)
 
 
 
