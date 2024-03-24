@@ -126,3 +126,8 @@ for file in files_predictions:
     print("Loaded and concatenated:", file)
 
 plot_metric_from_dfs(errors, 'JSD', sort=False)
+
+# write the mean of the errors to a csv file
+errors_mean = errors.mean()
+errors_mean.to_csv(f"./evaluation/global/{AUGMENTATION_PATH}/mean_errors_over_algorithms.csv")
+
