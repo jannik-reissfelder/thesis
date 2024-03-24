@@ -13,6 +13,9 @@ df = pd.read_parquet("./evaluation/groundtruth.gz")
 AUGMENTATION = False
 # set the path to save according to the augmentation
 AUGMENTATION_PATH = "non-augmentation" if not AUGMENTATION else "augmentation"
+
+
+####### FIRST PART #######
 # set file path
 file_path = f"./predictions/{AUGMENTATION_PATH}"
 # get files from path
@@ -56,16 +59,18 @@ for file in files:
 
 
 
+####### SECOND PART #######
 
-
-def plot_metric_from_dfs(errors, metric_name):
+def plot_metric_from_dfs(errors, metric_name, sort=False):
     """
     Plots a specified metric from a DataFrame that contains different metrics from multiple CSV files,
     where the metric columns are named with a prefix followed by an underscore and the metric name.
+    Optionally sorts the observations in descending order before plotting.
 
     Parameters:
     errors (DataFrame): A DataFrame containing the metrics from multiple CSV files.
     metric_name (str): The name of the metric column to plot (e.g., 'JS').
+    sort (bool): If True, sorts the observations in descending order before plotting. Default is False.
     """
     # Filter columns that end with the specified metric name
     metric_columns = [col for col in errors.columns if col.endswith(f"_{metric_name}")]
@@ -74,8 +79,15 @@ def plot_metric_from_dfs(errors, metric_name):
         print(f"No columns found for the metric '{metric_name}'.")
         return
 
+    # Identify the column containing "random_forest" for sorting, if required and present
+    rf_column = next((col for col in metric_columns if "random_forest" in col), None)
+
+    if sort and rf_column:
+        # Sort the DataFrame based on the "random_forest" metric column, in descending order
+        errors = errors.sort_values(by=rf_column, ascending=False)
+
     # Plotting
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(20, 8))
 
     for col in metric_columns:
         plt.plot(errors.index, errors[col], label=col)
@@ -87,10 +99,11 @@ def plot_metric_from_dfs(errors, metric_name):
     plt.xticks(rotation=90)
     plt.grid(True)
     plt.tight_layout()  # Adjust layout to not cut off labels
+    # plt.savefig(f"./evaluation/global/{AUGMENTATION_PATH}/{metric_name}_comparison.png")
     plt.show()
 
-# Directory containing the CSV files
-directory = "./evaluation/global/augmented"
+# set directory based on above setting
+directory = f"./evaluation/global/{AUGMENTATION_PATH}"
 
 # Get only CSV files from the directory
 files_predictions = [file for file in os.listdir(directory) if file.endswith('.csv')]
@@ -110,5 +123,6 @@ for file in files_predictions:
 
     # Concatenate horizontally
     errors = pd.concat([errors, sub], axis=1)
+    print("Loaded and concatenated:", file)
 
-# plot_metric_from_dfs(errors, 'BC')
+plot_metric_from_dfs(errors, 'JSD', sort=False)
