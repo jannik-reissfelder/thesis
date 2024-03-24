@@ -6,43 +6,52 @@ import matplotlib.pyplot as plt
 # Load dataframe for evaluation
 # the dataframe is the orignal ground truth samples averaged over their in class samples
 # sample with less than 2 samples are removed
-df = pd.read_parquet("./evaluation/base_75_quantile.gz")
+df = pd.read_parquet("./evaluation/groundtruth.gz")
 
+# define path variables
+# define augmentation scenario
+AUGMENTATION = False
+# set the path to save according to the augmentation
+AUGMENTATION_PATH = "non-augmentation" if not AUGMENTATION else "augmentation"
+# set file path
+file_path = f"./predictions/{AUGMENTATION_PATH}"
+# get files from path
+files = os.listdir(file_path)
 
+for file in files:
+    sub = pd.read_csv(os.path.join(file_path, file), index_col=0)
+    # reduce df.T to the same columsn as sub
+    df_core = df[sub.index].T
+    # concatenate both dataframes to compare
+    df_with_prediction = pd.concat([df_core, sub], axis=1).T
 
-# get files from directory
-# files_predictions = os.listdir("./predictions/non-augmentation")[:1]
-sub = pd.read_csv("./predictions/augmentation/knn_predictions.csv", index_col=0)
-sub = sub.T
+    # get all species
+    species_list = df_core.columns.tolist()
 
-# concatenate both dataframes to compare
-df_with_prediction = pd.concat([df, sub])
+    # prepare dictionary to store the results
+    results = {}
 
-# get all species
-species_list = df.index.tolist()
+    # iterate over all species
+    for species in species_list:
+        print(species)
+        # get any species by index name
+        class_true_vs_predictions = df_with_prediction[df_with_prediction.index.to_series().str.contains(species)]
+        # compute the distance between the two samples using the JS divergence, wassterstein and bray-curtis
+        jsd = compute_JS_divergence(class_true_vs_predictions.iloc[0], class_true_vs_predictions.iloc[1])
+        wst = calculate_wasserstein_with_normalization(class_true_vs_predictions.iloc[0], class_true_vs_predictions.iloc[1])
+        bc = compute_BC_dissimilarity(class_true_vs_predictions.iloc[0], class_true_vs_predictions.iloc[1])
+        bhatt_c, bhatt_d = calculate_bhattacharyya_with_normalization(class_true_vs_predictions.iloc[0], class_true_vs_predictions.iloc[1])
 
+        # store the results
+        results[species] = [jsd, wst, bc, bhatt_d]
 
-
-# prepare dictionary to store the results
-results = {}
-
-# iterate over all species
-for species in species_list:
-    print(species)
-    # get any species by index name
-    class_true_vs_predictions = df_with_prediction[df_with_prediction.index.to_series().str.contains(species)]
-    # compute the distance between the two samples using the JS divergence, wassterstein and bray-curtis
-    js = compute_JS_divergence(class_true_vs_predictions.iloc[0], class_true_vs_predictions.iloc[1])
-    wst = calculate_wasserstein_with_normalization(class_true_vs_predictions.iloc[0], class_true_vs_predictions.iloc[1])
-    bc = compute_BC_dissimilarity(class_true_vs_predictions.iloc[0], class_true_vs_predictions.iloc[1])
-    bhatt_c, bhatt_d = calculate_bhattacharyya_with_normalization(class_true_vs_predictions.iloc[0], class_true_vs_predictions.iloc[1])
-
-    # store the results
-    results[species] = [js, wst, bc, bhatt_c]
-
-# transform the dictionary to a dataframe
-results_df = pd.DataFrame(results, index=["JS", "WST", "BC", "Bhatt-Sim"]).T
-results_df.to_csv("./evaluation/global/augmented/knn_global_metrics_quantile_base.csv")
+    # transform the dictionary to a dataframe
+    results_df = pd.DataFrame(results, index=["JSD", "WST", "BC", "Bhatt"]).T
+    print("debug")
+    # save the results
+    # remove csv suffix from file
+    file = os.path.splitext(file)[0]
+    # results_df.to_csv(f"./evaluation/global/{AUGMENTATION_PATH}/{file}_global_metrics.csv")
 
 
 
