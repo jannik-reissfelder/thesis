@@ -8,7 +8,7 @@ import numpy as np
 
 
 ## Do some preprocessing which is universal to all models
-df = pd.read_parquet("./data/Seeds/60_seeds_CSS_merged.gz")
+df = pd.read_parquet("./data/Seeds/60_features_CSS.gz")
 
 
 # Function to calculate the coefficient of variation
@@ -18,7 +18,7 @@ def calculate_cv(data):
     return np.std(data, ddof=1) / np.mean(data)
 
 def filter_targets(df_raw):
-    df_quantile = df_raw.iloc[:, 68:].groupby(df_raw.index).quantile(0.85)
+    df_quantile = df_raw.iloc[:, 60:].groupby(df_raw.index).quantile(0.85)
     candidates = df_quantile.drop(columns=[col for col in df_quantile.columns if df_quantile[col].eq(0).all()]).columns
     df_interim = df_raw[candidates]
     # Initialize an empty dictionary to store core microbiome data
@@ -43,7 +43,7 @@ def filter_targets(df_raw):
         # Convert the list to a set to remove duplicates, getting the unique set of core microorganisms
         unique_core_microorganisms = set(all_core_microorganisms)
 
-        df_output = pd.concat([df_raw.iloc[:, :68], df_raw[list(unique_core_microorganisms)]], axis=1)
+        df_output = pd.concat([df_raw.iloc[:, :60], df_raw[list(unique_core_microorganisms)]], axis=1)
 
     return df_output, unique_core_microorganisms
 
@@ -89,7 +89,7 @@ AUGMENTATION_PATH = "non-augmentation" if not AUGMENTATION else "augmentation"
 # for each subspecies in subspecies we give it to the preprocessor
 for subspecies in df_red.index.unique():
     # store the ordering of the columns for later use
-    index_trues = df_red.iloc[:, 68:].loc[[subspecies]].columns
+    index_trues = df_red.iloc[:, 60:].loc[[subspecies]].columns
     # copy the dataframe
     df_input = df_red.copy()
     print("Hold out subspecies:", subspecies)
