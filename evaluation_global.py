@@ -87,14 +87,14 @@ def plot_metric_from_dfs(errors, metric_name, sort=False):
         errors = errors.sort_values(by=rf_column, ascending=False)
 
     # Plotting
-    plt.figure(figsize=(20, 8))
+    plt.figure(figsize=(15, 8))
 
     for col in metric_columns:
         plt.plot(errors.index, errors[col], label=col)
 
-    plt.title(f"Comparison of {metric_name} Metric Across Different DataFrames")
+    plt.title(f"Comparison of {metric_name} Metric Across Different Hold-out Species")
     plt.xlabel("Index")
-    plt.ylabel(metric_name)
+    plt.ylabel("Jensen-Shannon Divergence")
     plt.legend()
     plt.xticks(rotation=90)
     plt.grid(True)
@@ -117,6 +117,10 @@ for file in files_predictions:
 
     # Extract the filename without the extension to use as the column prefix
     filename_without_ext = os.path.splitext(file)[0]
+    # also drop "global_metrics" from the filename
+    filename_without_ext = filename_without_ext.replace("_global_metrics", "")
+    # also drop "predictions" from the filename
+    filename_without_ext = filename_without_ext.replace("_predictions", "")
 
     # Rename columns to include the filename as a prefix for distinction
     sub.columns = [filename_without_ext + '_' + col for col in sub.columns]
