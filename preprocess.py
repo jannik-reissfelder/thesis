@@ -118,14 +118,14 @@ class PreprocessingClass:
         self.set_hold_out_set()
 
         # Splitting the dataframe into features and targets
-        self.X = self.data.iloc[:, :67]
-        self.Y = self.data.iloc[:, 67:]
+        self.X = self.data.iloc[:, :59]
+        self.Y = self.data.iloc[:, 59:]
         print("X-shape:", self.X.shape)
         print("Y-shape:", self.Y.shape)
 
         # do same for hold out set
-        self.X_hold_out = self.hold_out_set.iloc[:, :67]
-        self.Y_hold_out = self.hold_out_set.iloc[:, 67:]
+        self.X_hold_out = self.hold_out_set.iloc[:, :59]
+        self.Y_hold_out = self.hold_out_set.iloc[:, 59:]
         print("X_hold_out-shape:", self.X_hold_out.shape)
         print("Y_hold_out-shape:", self.Y_hold_out.shape)
 
