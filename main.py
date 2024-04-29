@@ -6,6 +6,8 @@ from preprocess import PreprocessingClass
 from trainer_predictor import TrainerClass
 import numpy as np
 
+# Load the dataframe
+df = pd.read_parquet("./data/Seeds/60_features_CSS.gz")
 
 ## Do some preprocessing which is universal to all models
 ## get sample distribution
