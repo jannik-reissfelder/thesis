@@ -149,7 +149,7 @@ def plot_sorted_df_line_distribution(df_plot):
 
 
 
-def perform_pcoa_and_visualize(matrix):
+def perform_pcoa_and_visualize(matrix, mapping, source):
     """
     Performs PCoA on the given distance matrix and visualizes the results.
 
@@ -169,18 +169,20 @@ def perform_pcoa_and_visualize(matrix):
 
     # Convert the index to a column for easy plotting
     pcoa_coords['sample_detail'] = pcoa_coords.index
+    pcoa_coords["family"] = mapping
+    pcoa_coords["source"] = source
 
     # Create an interactive scatter plot
-    fig = px.scatter(pcoa_coords, x='PC1', y='PC2', text=None, color="sample_detail",
-                     title='PCoA of Microbiome Data',
+    fig = px.scatter(pcoa_coords, x='PC1', y='PC2', text=None , color="family",
+                     title='',
                      labels={
-                         'PC1': f"PC1 - {pcoa_results.proportion_explained['PC1']*100:.2f}%",
-                         'PC2': f"PC2 - {pcoa_results.proportion_explained['PC2']*100:.2f}%"
+                         'PC1': f"PC1: {pcoa_results.proportion_explained['PC1']*100:.2f}%",
+                         'PC2': f"PC2: {pcoa_results.proportion_explained['PC2']*100:.2f}%"
                      })
 
     # Optional: Adjust layout for better readability or aesthetics
     fig.update_traces(marker=dict(size=5), selector=dict(mode='markers+text'))
-    fig.update_layout(height=600, width=1000, legend_title_text='Species')
+    fig.update_layout(height=600, width=1000, legend_title_text='Family')
 
     fig.show()
 
