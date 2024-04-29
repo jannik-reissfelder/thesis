@@ -1,56 +1,136 @@
 import pandas as pd
 import os
-from helper_functions.eval_functions import compute_distance_matrix, plot_heatmap, perform_pca_and_visualize, plot_sorted_df_line_distribution, perform_pcoa_and_visualize
-import numpy as np
+from helper_functions.eval_functions import compute_JS_divergence, compute_BC_dissimilarity, calculate_wasserstein_with_normalization, calculate_bhattacharyya_with_normalization
+import matplotlib.pyplot as plt
+
+# Load dataframe for evaluation
+# the dataframe is the original ground truth samples averaged over their in class samples
+df = pd.read_parquet("./evaluation/groundtruth.gz")
+
+# define path variables
+# define augmentation scenario
+# AUGMENTATION = False
+# set the path to save according to the augmentation
+# AUGMENTATION_PATH = "non-augmentation" if not AUGMENTATION else "augmentation"
+AUGMENTATION_PATH = "artificial_species"
+
+####### FIRST PART #######
+# set file path
+file_path = f"./predictions/{AUGMENTATION_PATH}"
+# get files from path
+files = os.listdir(file_path)
+
+for file in files:
+    sub = pd.read_csv(os.path.join(file_path, file), index_col=0)
+    # reduce df.T to the same columsn as sub
+    df_core = df[sub.index].T
+    # concatenate both dataframes to compare
+    df_with_prediction = pd.concat([df_core, sub], axis=1).T
+
+    # get all species
+    species_list = df_core.columns.tolist()
+
+    # prepare dictionary to store the results
+    results = {}
+
+    # iterate over all species
+    for species in species_list:
+        print(species)
+        # get any species by index name
+        class_true_vs_predictions = df_with_prediction[df_with_prediction.index.to_series().str.contains(species)]
+        # compute the distance between the two samples using the JS divergence, wassterstein and bray-curtis
+        jsd = compute_JS_divergence(class_true_vs_predictions.iloc[0], class_true_vs_predictions.iloc[1])
+        wst = calculate_wasserstein_with_normalization(class_true_vs_predictions.iloc[0], class_true_vs_predictions.iloc[1])
+        bc = compute_BC_dissimilarity(class_true_vs_predictions.iloc[0], class_true_vs_predictions.iloc[1])
+        bhatt_c, bhatt_d = calculate_bhattacharyya_with_normalization(class_true_vs_predictions.iloc[0], class_true_vs_predictions.iloc[1])
+
+        # store the results
+        results[species] = [jsd, wst, bc, bhatt_d]
+
+    # transform the dictionary to a dataframe
+    results_df = pd.DataFrame(results, index=["JSD", "WST", "BC", "Bhatt"]).T
+    print("debug")
+    # save the results
+    # remove csv suffix from file
+    file = os.path.splitext(file)[0]
+    results_df.to_csv(f"./evaluation/{AUGMENTATION_PATH}/{file}_global_metrics.csv")
 
 
 
-## Load dataframe for evaltuation
-# the dataframe is the orignal ground truth samples averagged over their in class samples
-# sample with less than 2 samples are removed
-df = pd.read_parquet("./evaluation/base_avg.gz")
 
-# get files from directory
-files_predictions = os.listdir("./predictions/non-augmentation")
+####### SECOND PART #######
 
+def plot_metric_from_dfs(errors, metric_name, sort=False):
+    """
+    Plots a specified metric from a DataFrame that contains different metrics from multiple CSV files,
+    where the metric columns are named with a prefix followed by an underscore and the metric name.
+    Optionally sorts the observations in descending order before plotting.
 
-# now load files and merge them into one dataframe
-predictions = pd.DataFrame()
-for file in files_predictions:
-    print("Loading file:", file)
-    sub = pd.read_csv("./predictions/non-augmentation/" + file, index_col=0)
-    # rename columns to file name to keep track of the algorithms used
-    # replace 'predicted_' + col_name to 'file_name' + col_name
-    sub.columns = [col.replace('predicted_', file).replace('.csv', '_') for col in sub.columns]
-    predictions = pd.concat([predictions, sub], axis=1)
-# transpose the dataframe
-predictions = predictions.T
+    Parameters:
+    errors (DataFrame): A DataFrame containing the metrics from multiple CSV files.
+    metric_name (str): The name of the metric column to plot (e.g., 'JS').
+    sort (bool): If True, sorts the observations in descending order before plotting. Default is False.
+    """
+    # Filter columns that end with the specified metric name
+    metric_columns = [col for col in errors.columns if col.endswith(f"_{metric_name}")]
 
-# choose class to evaluate
-class_to_evaluate = "Brassica napus"
+    if not metric_columns:
+        print(f"No columns found for the metric '{metric_name}'.")
+        return
 
-# get the predictions over the index that contains the class
-# Convert the index to string and filter rows where the index contains "Brassica napus"
-predictions_eval_class = predictions[predictions.index.to_series().str.contains(class_to_evaluate)]
+    # Identify the column containing "random_forest" for sorting, if required and present
+    rf_column = next((col for col in metric_columns if "random_forest" in col), None)
 
-# concatenate the filtered dataframe with the original dataframe
-df_with_prediction = pd.concat([df, predictions_eval_class])
+    if sort and rf_column:
+        # Sort the DataFrame based on the "random_forest" metric column, in descending order
+        errors = errors.sort_values(by=rf_column, ascending=False)
 
-# Compute and plot  distance matrix based on metric
-metric = 'bray-curtis'
-matrix = compute_distance_matrix(df_with_prediction, metric=metric)
-plot_heatmap(matrix, title='BC - Matrix', annotations=True)
+    # Plotting
+    plt.figure(figsize=(10, 8))
 
-# this plots the PCA of the original plant species vs 1 predicted plant species
-perform_pca_and_visualize(df, predictions_eval_class)
-# this plots the PCoA of the original plant species vs 1 predicted plant species
-perform_pcoa_and_visualize(matrix=matrix)
+    for col in metric_columns:
+        plt.plot(errors.index, errors[col], label=col)
 
+    plt.title(f"Comparison of {metric_name} Metric Across Different Hold-out Species")
+    plt.xlabel("Index")
+    plt.ylabel("Jensen-Shannon Divergence")
+    plt.legend()
+    plt.xticks(rotation=90)
+    plt.grid(True)
+    plt.tight_layout()  # Adjust layout to not cut off labels
+    # plt.savefig(f"./evaluation/global/{AUGMENTATION_PATH}/{metric_name}_comparison.png")
+    plt.show()
 
+# # set directory based on above setting
+# directory = f"./evaluation/global/{AUGMENTATION_PATH}"
+#
+# # Get only CSV files from the directory
+# files_predictions = [file for file in os.listdir(directory) if file.endswith('.csv')]
+#
+# # Initialize an empty DataFrame to hold all metrics
+# errors = pd.DataFrame()
+# # Load files and merge their specified metric into one DataFrame
+# for file in files_predictions:
+#     print("Loading file:", file)
+#     sub = pd.read_csv(os.path.join(directory, file), index_col=0)
+#
+#     # Extract the filename without the extension to use as the column prefix
+#     filename_without_ext = os.path.splitext(file)[0]
+#     # also drop "global_metrics" from the filename
+#     filename_without_ext = filename_without_ext.replace("_global_metrics", "")
+#     # also drop "predictions" from the filename
+#     filename_without_ext = filename_without_ext.replace("_predictions", "")
+#
+#     # Rename columns to include the filename as a prefix for distinction
+#     sub.columns = [filename_without_ext + '_' + col for col in sub.columns]
+#
+#     # Concatenate horizontally
+#     errors = pd.concat([errors, sub], axis=1)
+#     print("Loaded and concatenated:", file)
+#
+# # plot_metric_from_dfs(errors, 'JSD', sort=True)
+#
+# # write the mean of the errors to a csv file
+# errors_mean = errors.mean()
+# # errors_mean.to_csv(f"./evaluation/global/{AUGMENTATION_PATH}/mean_errors_over_algorithms_artificial_Fabaceae.csv")
 
-# this plots the abundance of the original plant species vs its predicted plant species
-class_true_vs_predictions = df_with_prediction[df_with_prediction.index.to_series().str.contains(class_to_evaluate)]
-plot_sorted_df_line_distribution(class_true_vs_predictions)
-
-
-print("done") # debug point
