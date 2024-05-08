@@ -7,8 +7,8 @@ def calculate_cv(data):
         return np.nan  # Avoid division by zero
     return np.std(data, ddof=1) / np.mean(data)
 
-def filter_targets(df_raw):
-    df_quantile = df_raw.iloc[:, 80:].groupby(df_raw.index).quantile(0.85)
+def filter_targets(df_raw, n_features):
+    df_quantile = df_raw.iloc[:, n_features:].groupby(df_raw.index).quantile(0.85)
     candidates = df_quantile.drop(columns=[col for col in df_quantile.columns if df_quantile[col].eq(0).all()]).columns
     df_interim = df_raw[candidates]
     # Initialize an empty dictionary to store core microbiome data
@@ -33,7 +33,18 @@ def filter_targets(df_raw):
         # Convert the list to a set to remove duplicates, getting the unique set of core microorganisms
         unique_core_microorganisms = set(all_core_microorganisms)
 
-        df_output = pd.concat([df_raw.iloc[:, :80], df_raw[list(unique_core_microorganisms)]], axis=1)
+        df_output = pd.concat([df_raw.iloc[:, :n_features], df_raw[list(unique_core_microorganisms)]], axis=1)
 
     return df_output, unique_core_microorganisms
 
+
+def get_feature_length(dataset_name):
+    """
+    Determines the feature length based on dataset name
+    """
+    if "60_features" in dataset_name:
+        return 60
+    elif "68_features" in dataset_name:
+        return 68
+    else:
+        return 80
