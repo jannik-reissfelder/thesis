@@ -45,7 +45,4 @@ Thumbs.db
 secrets.txt
 
 # ignore inputs and results
-
-/data
-/results
 /old_nb
