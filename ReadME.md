@@ -7,7 +7,7 @@ This repository contains the source code for my master's thesis project titled "
 To set up this project, clone the repository and install the required dependencies.
 
 ```bash
-git clone https://github.com/yourusername/thesis-repo.git
+git clone https://github.com/jannik-reissfelder/thesis-repo.git
 cd thesis-repo
 pip install -r requirements.txt
 ```
@@ -16,16 +16,18 @@ pip install -r requirements.txt
 To run the main pipeline that processes the data and trains the model, execute the main.py script:
 
 ```bash
-Copy code
 python main.py
 ```
 
+Please note that in the default configuration, the script will use ``random_forest`` as the algorithm for training. To change the algorithm, modify the ``ALGO_NAME`` variable in the main.py script. The available algorithms are: ``random_forest``, ``knn``, ``linear_regression``, ``elastic_net`` and ``gaussian_process``.
+Similarly, per default no augmentation is used. To use augmentation, set the ``AUGMENTATION`` variable to ``True`` in the main.py script.
+
+
 This script initializes the preprocessing of the input data, followed by the training of models using the Preprocessor and TrainerClass.
 
-To evaluate the models, run the evaluation.py script after the models have been trained:
+To evaluate the models, run the evaluation.py script after the models have been trained and predictions have been made:
 
 ```bash
-Copy code
 python evaluation.py
 ```
 This will assess the model predictions using three main metrics and store the results per species.
@@ -51,7 +53,7 @@ These details support the reproducibility of the research and allow for in-depth
 
 
 ## Credits
-This project was developed by Jannik Reißfelder. Special thanks to ATB Leibniz-Institute Potsdam, Department of Data Science, and all contributors to the project.
+This project was developed by Jannik Reißfelder. Special thanks to ATB Leibniz-Institute Potsdam, Department of Data Science.
 
 ## Contact
 For support or collaboration, please contact me.
