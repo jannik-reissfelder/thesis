@@ -1,13 +1,22 @@
 ### Main Script to run the entire pipeline
 
 import pandas as pd
-from helper_functions.preprocessing_functions import filter_targets
+from helper_functions.preprocessing_functions import filter_targets, get_feature_length
 from preprocess import PreprocessingClass
 from trainer_predictor import TrainerClass
 import numpy as np
 
+# set base path
+base_path = "./data/Seeds/"
+dataset_name = "60_features_CSS"
+# build file path
+file_path = f"{base_path}{dataset_name}.gz"
+
 # Load the dataframe
-df = pd.read_parquet("./data/Seeds/60_features_CSS.gz")
+df = pd.read_parquet(file_path)
+
+# get the feature length
+feature_length = get_feature_length(dataset_name)
 
 ## Do some preprocessing which is universal to all models
 ## get sample distribution
@@ -28,7 +37,7 @@ for species in sample_distribution.index:
 # print("Species degree mapping:", species_degree_mapping)
 
 # filter the targets
-df_red, microbes_left = filter_targets(df)
+df_red, microbes_left = filter_targets(df, feature_length)
 print("Number Microbes left:", len(microbes_left))
 print("Number of sample plant species left:", df_red.index.nunique())
 
@@ -47,11 +56,11 @@ AUGMENTATION_PATH = "non-augmentation" if not AUGMENTATION else "augmentation"
 # for each subspecies in subspecies we give it to the preprocessor
 for subspecies in df_red.index.unique():
     # store the ordering of the columns for later use
-    index_trues = df_red.iloc[:, 60:].loc[[subspecies]].columns
+    index_trues = df_red.iloc[:, feature_length:].loc[[subspecies]].columns
     # copy the dataframe
     df_input = df_red.copy()
     print("Hold out subspecies:", subspecies)
-    preprocessor = PreprocessingClass(hold_out_species=subspecies, data=df_input, mapping=species_degree_mapping, use_augmentation=AUGMENTATION)
+    preprocessor = PreprocessingClass(hold_out_species=subspecies, data=df_input, mapping=species_degree_mapping, use_augmentation=AUGMENTATION, feature_length=feature_length)
     preprocessor.run_all_methods()
 
     # get X_train and Y_train for training and prediction
