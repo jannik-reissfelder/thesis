@@ -76,6 +76,7 @@ class PreprocessingClass:
                  hold_out_species: str,
                  mapping: dict,
                  data: pd.DataFrame,
+                 feature_length: int,
                  use_augmentation: bool = False,
                  use_normalized_data: str = "absolute",
                  candidate_n_neighbors: int = 80,
@@ -84,6 +85,7 @@ class PreprocessingClass:
 
         self.hold_out_species = hold_out_species
         self.data = data
+        self.feature_length = feature_length
         self.mapping = mapping
         self.use_augmentation = use_augmentation
         self.use_normalized_data = use_normalized_data
@@ -118,14 +120,14 @@ class PreprocessingClass:
         self.set_hold_out_set()
 
         # Splitting the dataframe into features and targets
-        self.X = self.data.iloc[:, :59]
-        self.Y = self.data.iloc[:, 59:]
+        self.X = self.data.iloc[:, :(self.feature_length -1)]
+        self.Y = self.data.iloc[:, (self.feature_length -1):]
         print("X-shape:", self.X.shape)
         print("Y-shape:", self.Y.shape)
 
         # do same for hold out set
-        self.X_hold_out = self.hold_out_set.iloc[:, :59]
-        self.Y_hold_out = self.hold_out_set.iloc[:, 59:]
+        self.X_hold_out = self.hold_out_set.iloc[:, :(self.feature_length -1)]
+        self.Y_hold_out = self.hold_out_set.iloc[:, (self.feature_length -1):]
         print("X_hold_out-shape:", self.X_hold_out.shape)
         print("Y_hold_out-shape:", self.Y_hold_out.shape)
 
